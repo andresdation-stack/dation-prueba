@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}ESP32 – Último dato{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Último dato del ESP32</h1>
+  <div id="value" class="v">—</div>
+  <div id="device" class="muted">—</div>
+  <div id="time" class="muted">—</div>
+  <p class="muted" style="margin-top: .75rem">
+    Esta vista usa <code>base.html</code>. Podés cambiar estilos en <code>static/css/styles.css</code>.
+  </p>
+{% endblock %}
+

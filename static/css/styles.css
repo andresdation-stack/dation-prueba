@@ -1,0 +1,16 @@
+body { font-family: system-ui, Arial, sans-serif; margin: 2rem; }
+.container { max-width: 640px; }
+.card { border: 1px solid #ddd; border-radius: 12px; padding: 1.25rem; max-width: 520px; }
+h1 { margin: 0 0 .5rem 0; font-size: 1.25rem; }
+.v { font-size: 2.5rem; margin: .25rem 0; }
+.muted { color: #666; font-size: .9rem; }
+
+/* Navbar */
+.nav { display: flex; align-items: center; gap: 1rem; padding: .75rem 1rem; border-bottom: 1px solid #eee; margin: 0 0 1rem 0; }
+.brand { font-weight: 700; text-decoration: none; color: #222; }
+.links { display: flex; gap: 1rem; }
+.links a { color: #333; text-decoration: none; }
+.links a:hover { text-decoration: underline; }
+
+/* Footer */
+.footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #eee; color: #666; font-size: .9rem; }

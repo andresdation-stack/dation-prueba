@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}ESP32 – Último dato{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    {% block head %}{% endblock %}
+  </head>
+  <body>
+    <header class="nav">
+      {% block navbar %}
+      <a class="brand" href="{{ url_for('home') }}">Dation</a>
+      <nav class="links">
+        <a href="{{ url_for('home') }}">Inicio</a>
+        <a href="{{ url_for('about') }}">Acerca</a>
+      </nav>
+      {% endblock %}
+    </header>
+
+    <main class="container">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+      {% block footer %}
+      <span>© {{ current_year }} Dation</span>
+      {% endblock %}
+    </footer>
+
+    {% block scripts %}
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% endblock %}
+  </body>
+</html>
