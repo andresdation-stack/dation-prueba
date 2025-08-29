@@ -16,3 +16,24 @@ async function load() {
 load();
 setInterval(load, 2000);
 
+// Normalize any <img> or <video> sources that accidentally use
+// Windows-style backslashes or lack leading slash.
+function fixAssetPaths() {
+  const sel = 'img[src^="assets\\\\"], source[src^="assets\\\\"], video[src^="assets\\\\"], img[src^="assets/"], source[src^="assets/"], video[src^="assets/"]';
+  document.querySelectorAll(sel).forEach(el => {
+    const attr = el.tagName.toLowerCase() === 'source' ? 'src' : 'src';
+    let val = el.getAttribute(attr);
+    if (!val) return;
+    // Replace backslashes with forward slashes
+    val = val.replace(/\\\\/g, '/');
+    // Ensure it starts with a leading slash
+    if (!val.startsWith('/')) val = '/' + val;
+    el.setAttribute(attr, val);
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', fixAssetPaths);
+} else {
+  fixAssetPaths();
+}
