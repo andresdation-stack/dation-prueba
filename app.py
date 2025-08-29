@@ -1,5 +1,5 @@
-import os, time
-from flask import Flask, request, jsonify, render_template_string
+import os, time , psycopg2
+from flask import Flask, request, jsonify, render_template_string, Markup
 
 API_KEY = os.environ.get("API_KEY", "andres-123")
 
@@ -50,7 +50,21 @@ HTML = """
 </body>
 </html>
 """
+@app.get("/ver")
+def ver():
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"), sslmode="require")
+    cur = conn.cursor()
+    cur.execute("select id, ts, valor from lecturas order by id desc limit 50;")
+    rows = cur.fetchall()
+    cur.close(); conn.close()
 
+    # HTML mínimo para ver datos en el navegador
+    html = ["<h1>Lecturas</h1><table border='1' cellpadding='6'>",
+            "<tr><th>ID</th><th>Fecha</th><th>Valor</th></tr>"]
+    for r in rows:
+        html.append(f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td></tr>")
+    html.append("</table>")
+    return Markup("".join(html))
 @app.get("/")
 def home():
     return render_template_string(HTML)
