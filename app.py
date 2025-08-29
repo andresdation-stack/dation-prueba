@@ -1,6 +1,6 @@
 import os
 import time
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 
 
 API_KEY = os.environ.get("API_KEY", "andres-123")
@@ -29,6 +29,13 @@ def health():
 @app.get("/api/latest")
 def latest():
     return jsonify(state)
+
+
+# Serve files from the local ./assets directory so index.html
+# can reference paths like /assets/mp4/bg.mp4 or /assets/*.ico
+@app.get("/assets/<path:filename>")
+def assets(filename):
+    return send_from_directory("assets", filename)
 
 
 @app.post("/ingest")
