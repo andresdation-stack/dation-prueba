@@ -1,5 +1,6 @@
 import os, time , psycopg2
-from flask import Flask, request, jsonify, render_template_string, Markup
+from flask import Flask, request, jsonify, render_template_string
+from markupsafe import Markup
 
 API_KEY = os.environ.get("API_KEY", "andres-123")
 
