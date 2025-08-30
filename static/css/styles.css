@@ -10965,4 +10965,17 @@ video.bg-video {
     right: 2.5rem;
     width: auto;
   }
+}/* --- Dation overrides: logo placement --- */
+.masthead > img {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  max-width: 180px;
+  height: auto;
+  z-index: 3;
+  object-fit: contain;
+}
+.masthead .masthead-content { padding-top: 7rem; }
+@media (min-width: 992px) {
+  .masthead .masthead-content { padding-top: 7rem; }
 }
