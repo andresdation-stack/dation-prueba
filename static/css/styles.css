@@ -184,12 +184,11 @@ body {
 
 .hero-subtitle {
   display: block;
-  font-size: clamp(1rem, 2.5vw, 1.4rem);
-  font-weight: 400;
-  color: var(--gray);
-  margin-top: 0.6rem;
-  min-height: 2rem;
-  -webkit-text-fill-color: var(--gray);
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 600;
+  color: var(--white);
+  min-height: 4rem;
+  -webkit-text-fill-color: var(--white);
 }
 
 .hero-desc {
