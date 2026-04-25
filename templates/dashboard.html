@@ -10,23 +10,79 @@
     <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet" />
 </head>
 <body>
-<div class="dash-page">
+<div class="app-layout">
 
-    <!-- Topbar -->
-    <nav class="dash-topbar">
-        <a href="{{ url_for('home') }}" class="dash-brand">Dation</a>
-        <div class="dash-topbar-links">
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-inner">
+
+            <!-- Brand -->
+            <div class="sidebar-brand">
+                <a href="{{ url_for('home') }}" class="sidebar-logo">Dation</a>
+                <button class="sidebar-close" id="sidebarClose" aria-label="Cerrar menú">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Nav principal -->
+            <nav class="sidebar-nav">
+                <span class="sidebar-section-label">General</span>
+                <a href="{{ url_for('dashboard') }}" class="sidebar-link active">
+                    <i class="fas fa-th-large"></i>
+                    <span>Dashboard</span>
+                </a>
+            </nav>
+
             {% if current_user.is_admin %}
-            <a href="{{ url_for('admin') }}"><i class="fas fa-shield-alt"></i> Administración</a>
+            <nav class="sidebar-nav" style="margin-top:1rem">
+                <span class="sidebar-section-label">Administración</span>
+                <a href="{{ url_for('admin') }}" class="sidebar-link">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Panel de admin</span>
+                </a>
+            </nav>
             {% endif %}
-            <span class="dash-user"><i class="fas fa-user"></i> {{ current_user.username }}</span>
-            <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Salir</a>
-        </div>
-    </nav>
 
-    <!-- Body -->
-    <div class="dash-body">
-        <div class="dash-header">
+            <!-- Spacer -->
+            <div style="flex:1"></div>
+
+            <!-- User + Logout -->
+            <div class="sidebar-footer">
+                <div class="sidebar-user">
+                    <div class="sidebar-avatar">{{ current_user.username[0]|upper }}</div>
+                    <div class="sidebar-user-info">
+                        <span class="sidebar-username">{{ current_user.username }}</span>
+                        <span class="sidebar-role">{% if current_user.is_admin %}Administrador{% else %}Usuario{% endif %}</span>
+                    </div>
+                </div>
+                <a href="{{ url_for('logout') }}" class="sidebar-logout" title="Cerrar sesión">
+                    <i class="fas fa-sign-out-alt"></i>
+                </a>
+            </div>
+
+        </div>
+    </aside>
+
+    <!-- Overlay para mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <div class="app-main">
+
+        <!-- Topbar mobile -->
+        <div class="app-topbar">
+            <button class="topbar-toggle" id="sidebarToggle" aria-label="Abrir menú">
+                <i class="fas fa-bars"></i>
+            </button>
+            <span class="topbar-title">Dashboard</span>
+            <div class="dash-online-legend">
+                <span class="legend-item"><span class="dot dot-on"></span> En línea</span>
+                <span class="legend-item"><span class="dot dot-off"></span> Sin datos</span>
+            </div>
+        </div>
+
+        <!-- Page header (desktop) -->
+        <div class="page-header">
             <div>
                 <h1 class="dash-title">Dashboard</h1>
                 <p class="dash-subtitle">
@@ -37,12 +93,13 @@
                     {% endif %}
                 </p>
             </div>
-            <div class="dash-online-legend">
+            <div class="dash-online-legend desktop-legend">
                 <span class="legend-item"><span class="dot dot-on"></span> En línea</span>
                 <span class="legend-item"><span class="dot dot-off"></span> Sin datos</span>
             </div>
         </div>
 
+        <!-- Device cards -->
         {% if devices %}
         <div class="device-grid">
             {% for d in devices %}
@@ -93,11 +150,12 @@
             {% endif %}
         </div>
         {% endif %}
-    </div>
-</div>
+
+    </div><!-- /app-main -->
+</div><!-- /app-layout -->
 
 <script>
-// Mostrar timestamps relativos legibles
+// Timestamps relativos
 document.querySelectorAll('[data-ts]').forEach(el => {
     const ts = parseInt(el.dataset.ts) * 1000;
     function update() {
@@ -110,8 +168,21 @@ document.querySelectorAll('[data-ts]').forEach(el => {
     setInterval(update, 10000);
 });
 
-// Auto-refresh cada 30 segundos para actualizar online/offline
+// Auto-refresh cada 30 segundos
 setTimeout(() => location.reload(), 30000);
+
+// Sidebar mobile
+const sidebar  = document.getElementById('sidebar');
+const overlay  = document.getElementById('sidebarOverlay');
+const toggleBtn = document.getElementById('sidebarToggle');
+const closeBtn  = document.getElementById('sidebarClose');
+
+function openSidebar()  { sidebar.classList.add('open'); overlay.classList.add('open'); }
+function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
+
+toggleBtn.addEventListener('click', openSidebar);
+closeBtn.addEventListener('click', closeSidebar);
+overlay.addEventListener('click', closeSidebar);
 </script>
 </body>
 </html>
