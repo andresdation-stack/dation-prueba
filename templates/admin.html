@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Panel de administración · Dation</title>
+    <link rel="icon" type="image/x-icon" href="/assets/D-icono.ico" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet" />
+</head>
+<body>
+<div class="admin-page">
+
+    <div class="admin-topbar">
+        <a href="{{ url_for('home') }}" class="brand">Dation</a>
+        <div class="admin-topbar-links">
+            <span style="color:var(--gray);font-size:0.85rem">
+                <i class="fas fa-user" style="color:var(--orange)"></i> {{ current_user.username }}
+            </span>
+            <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
+        </div>
+    </div>
+
+    <div class="admin-body">
+        <h1 style="font-family:var(--font-title);font-size:1.6rem;font-weight:700;margin-bottom:0.4rem">
+            Panel de administración
+        </h1>
+        <p style="color:var(--gray);font-size:0.9rem;margin-bottom:2rem">
+            Gestioná los usuarios del sistema.
+        </p>
+
+        {% if msg %}
+        <div class="auth-success"><i class="fas fa-check-circle"></i> {{ msg }}</div>
+        {% endif %}
+        {% if error %}
+        <div class="auth-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</div>
+        {% endif %}
+
+        <!-- Crear usuario -->
+        <div class="admin-section">
+            <h2><i class="fas fa-user-plus"></i> Crear usuario</h2>
+            <form method="POST" action="{{ url_for('admin') }}">
+                <input type="hidden" name="action" value="create" />
+                <div class="admin-form-row">
+                    <div class="admin-field">
+                        <label for="new_username">Nombre de usuario</label>
+                        <input type="text" id="new_username" name="new_username" placeholder="usuario123" required />
+                    </div>
+                    <div class="admin-field">
+                        <label for="new_password">Contraseña</label>
+                        <input type="password" id="new_password" name="new_password" placeholder="••••••••" required />
+                    </div>
+                </div>
+                <label class="admin-checkbox">
+                    <input type="checkbox" name="is_admin" />
+                    Otorgar permisos de administrador
+                </label>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-plus"></i> Crear usuario
+                </button>
+            </form>
+        </div>
+
+        <!-- Lista de usuarios -->
+        <div class="admin-section">
+            <h2><i class="fas fa-users"></i> Usuarios ({{ users|length }})</h2>
+            {% if users %}
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Usuario</th>
+                        <th>Rol</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for u in users %}
+                <tr>
+                    <td style="color:var(--gray-dark)">{{ u[0] }}</td>
+                    <td style="font-weight:500">{{ u[1] }}</td>
+                    <td>
+                        {% if u[2] %}
+                        <span class="badge-admin">Admin</span>
+                        {% else %}
+                        <span class="badge-user">Usuario</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+                            <button type="button" class="btn-sm btn-sm-orange"
+                                onclick="togglePw({{ u[0] }})">
+                                <i class="fas fa-key"></i> Cambiar contraseña
+                            </button>
+                            {% if u[0] != current_user.id %}
+                            <form method="POST" action="{{ url_for('admin') }}"
+                                onsubmit="return confirm('¿Eliminar al usuario {{ u[1] }}?')">
+                                <input type="hidden" name="action" value="delete" />
+                                <input type="hidden" name="user_id" value="{{ u[0] }}" />
+                                <button type="submit" class="btn-sm btn-sm-danger">
+                                    <i class="fas fa-trash"></i> Eliminar
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        <!-- Inline change-password form -->
+                        <form method="POST" action="{{ url_for('admin') }}"
+                              class="pw-form" id="pw-{{ u[0] }}">
+                            <input type="hidden" name="action" value="change_password" />
+                            <input type="hidden" name="user_id" value="{{ u[0] }}" />
+                            <input type="password" name="new_password" placeholder="Nueva contraseña" required />
+                            <button type="submit" class="btn-sm btn-sm-orange">
+                                <i class="fas fa-check"></i> Guardar
+                            </button>
+                            <button type="button" class="btn-sm btn-sm-danger"
+                                onclick="togglePw({{ u[0] }})">
+                                Cancelar
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color:var(--gray);font-size:0.9rem">No hay usuarios.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePw(id) {
+    const form = document.getElementById('pw-' + id);
+    form.classList.toggle('open');
+    if (form.classList.contains('open')) {
+        form.querySelector('input[type="password"]').focus();
+    }
+}
+</script>
+</body>
+</html>

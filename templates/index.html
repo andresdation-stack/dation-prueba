@@ -22,6 +22,14 @@
                 <li><a href="#servicios">Servicios</a></li>
                 <li><a href="#nosotros">Nosotros</a></li>
                 <li><a href="#contacto">Contacto</a></li>
+                {% if current_user.is_authenticated %}
+                  {% if current_user.is_admin %}
+                  <li><a href="{{ url_for('admin') }}" class="nav-admin-link"><i class="fas fa-shield-alt"></i> Panel</a></li>
+                  {% endif %}
+                  <li><a href="{{ url_for('logout') }}">Salir</a></li>
+                {% else %}
+                  <li><a href="{{ url_for('login') }}" class="nav-login-btn">Iniciar sesión</a></li>
+                {% endif %}
             </ul>
             <button class="nav-toggle" id="navToggle" aria-label="Menú">
                 <span></span><span></span><span></span>
