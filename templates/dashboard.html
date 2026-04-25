@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard · Dation</title>
+    <link rel="icon" type="image/x-icon" href="/assets/D-icono.ico" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet" />
+</head>
+<body>
+<div class="dash-page">
+
+    <!-- Topbar -->
+    <nav class="dash-topbar">
+        <a href="{{ url_for('home') }}" class="dash-brand">Dation</a>
+        <div class="dash-topbar-links">
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('admin') }}"><i class="fas fa-shield-alt"></i> Administración</a>
+            {% endif %}
+            <span class="dash-user"><i class="fas fa-user"></i> {{ current_user.username }}</span>
+            <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Salir</a>
+        </div>
+    </nav>
+
+    <!-- Body -->
+    <div class="dash-body">
+        <div class="dash-header">
+            <div>
+                <h1 class="dash-title">Dashboard</h1>
+                <p class="dash-subtitle">
+                    {% if devices %}
+                        {{ devices|length }} dispositivo{% if devices|length != 1 %}s{% endif %} asignado{% if devices|length != 1 %}s{% endif %}
+                    {% else %}
+                        Sin dispositivos asignados
+                    {% endif %}
+                </p>
+            </div>
+            <div class="dash-online-legend">
+                <span class="legend-item"><span class="dot dot-on"></span> En línea</span>
+                <span class="legend-item"><span class="dot dot-off"></span> Sin datos</span>
+            </div>
+        </div>
+
+        {% if devices %}
+        <div class="device-grid">
+            {% for d in devices %}
+            <div class="device-card {% if d.online %}card-online{% else %}card-offline{% endif %}">
+                <div class="device-card-top">
+                    <div class="device-icon-wrap {% if d.online %}icon-on{% else %}icon-off{% endif %}">
+                        <i class="fas {{ d.icon }}"></i>
+                    </div>
+                    <span class="status-badge {% if d.online %}badge-on{% else %}badge-off{% endif %}">
+                        <span class="status-dot"></span>
+                        {% if d.online %}En línea{% else %}Sin datos{% endif %}
+                    </span>
+                </div>
+
+                <h3 class="device-name">{{ d.name }}</h3>
+                <p class="device-id">ID: <code>{{ d.device_id }}</code></p>
+
+                <div class="device-value-row">
+                    {% if d.value is not none %}
+                    <div class="device-value">
+                        <span class="value-num">{{ "%.2f"|format(d.value) }}</span>
+                    </div>
+                    {% else %}
+                    <div class="device-value-empty">Sin datos aún</div>
+                    {% endif %}
+                </div>
+
+                {% if d.ts %}
+                <p class="device-ts">
+                    <i class="fas fa-clock"></i>
+                    Último dato: <span data-ts="{{ d.ts }}"></span>
+                </p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% else %}
+        <div class="dash-empty">
+            <i class="fas fa-satellite-dish"></i>
+            <p>No tenés dispositivos asignados todavía.</p>
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('admin') }}" class="btn-primary" style="margin-top:1.2rem">
+                <i class="fas fa-plus"></i> Crear dispositivo
+            </a>
+            {% else %}
+            <p class="dash-empty-sub">Pedile al administrador que te asigne uno.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Mostrar timestamps relativos legibles
+document.querySelectorAll('[data-ts]').forEach(el => {
+    const ts = parseInt(el.dataset.ts) * 1000;
+    function update() {
+        const diff = Math.floor((Date.now() - ts) / 1000);
+        if (diff < 60) el.textContent = 'hace ' + diff + 's';
+        else if (diff < 3600) el.textContent = 'hace ' + Math.floor(diff/60) + 'min';
+        else el.textContent = 'hace ' + Math.floor(diff/3600) + 'h';
+    }
+    update();
+    setInterval(update, 10000);
+});
+
+// Auto-refresh cada 30 segundos para actualizar online/offline
+setTimeout(() => location.reload(), 30000);
+</script>
+</body>
+</html>
