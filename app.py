@@ -1100,6 +1100,9 @@ def admin_test_email():
             with urllib.request.urlopen(req, timeout=10) as resp:
                 body = resp.read().decode()
                 results.append(f"Resend OK (status {resp.status}): {body}")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode()
+            results.append(f"Resend ERROR {e.code}: {body}")
         except Exception as e:
             results.append(f"Resend ERROR: {type(e).__name__}: {e}")
     else:
