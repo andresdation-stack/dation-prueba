@@ -56,10 +56,10 @@
           </td>
           <td>
             <div style="display:flex;gap:6px">
-              <button class="btn-icon" title="Editar" onclick="editarUsuario({{ u|tojson }})">
+              <button class="btn-icon" title="Editar" onclick='editarUsuario({{ u|tojson }})'>
                 <i class="fas fa-edit"></i>
               </button>
-              <button class="btn-icon danger" title="Eliminar" onclick="eliminarUsuario({{ u.id }}, '{{ u.username }}')">
+              <button class="btn-icon danger" title="Eliminar" onclick='eliminarUsuario({{ u.id }}, "{{ u.username }}")'>
                 <i class="fas fa-trash"></i>
               </button>
             </div>

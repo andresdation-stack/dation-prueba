@@ -52,8 +52,8 @@
           </td>
           <td>
             <div style="display:flex;gap:6px">
-              <button class="btn-icon" onclick="editarEstado({{ e|tojson }})"><i class="fas fa-edit"></i></button>
-              <button class="btn-icon danger" onclick="eliminarEstado({{ e.id }}, '{{ e.nombre }}')"><i class="fas fa-trash"></i></button>
+              <button class="btn-icon" onclick='editarEstado({{ e|tojson }})'><i class="fas fa-edit"></i></button>
+              <button class="btn-icon danger" onclick='eliminarEstado({{ e.id }}, "{{ e.nombre }}")'><i class="fas fa-trash"></i></button>
             </div>
           </td>
         </tr>

@@ -49,10 +49,10 @@
           <td class="td-muted">{{ contactos.get(e.id, [])|length }}</td>
           <td>
             <div style="display:flex;gap:6px">
-              <button class="btn-icon" title="Editar" onclick="editarEmpresa({{ e|tojson }}, {{ contactos.get(e.id, [])|tojson }})">
+              <button class="btn-icon" title="Editar" onclick='editarEmpresa({{ e|tojson }}, {{ contactos.get(e.id, [])|tojson }})'>
                 <i class="fas fa-edit"></i>
               </button>
-              <button class="btn-icon danger" title="Eliminar" onclick="eliminarEmpresa({{ e.id }}, '{{ e.nombre }}')">
+              <button class="btn-icon danger" title="Eliminar" onclick='eliminarEmpresa({{ e.id }}, "{{ e.nombre }}")'>
                 <i class="fas fa-trash"></i>
               </button>
             </div>

@@ -53,10 +53,10 @@
           </td>
           <td>
             <div style="display:flex;gap:6px">
-              <button class="btn-icon" onclick="editarNodo({{ n|tojson }}, {{ sims.get(n.id, [])|tojson }})">
+              <button class="btn-icon" onclick='editarNodo({{ n|tojson }}, {{ sims.get(n.id, [])|tojson }})'>
                 <i class="fas fa-edit"></i>
               </button>
-              <button class="btn-icon danger" onclick="eliminarNodo({{ n.id }}, '{{ n.imei }}')">
+              <button class="btn-icon danger" onclick='eliminarNodo({{ n.id }}, "{{ n.imei }}")'>
                 <i class="fas fa-trash"></i>
               </button>
             </div>
