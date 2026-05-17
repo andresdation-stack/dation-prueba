@@ -30,7 +30,8 @@ SMTP_PORT    = int(os.environ.get("SMTP_PORT", 587))
 SMTP_USER    = os.environ.get("SMTP_USER", "")
 SMTP_PASS    = os.environ.get("SMTP_PASS", "")
 SMTP_FROM    = os.environ.get("SMTP_FROM", SMTP_USER)
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_API_KEY   = os.environ.get("RESEND_API_KEY", "")
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 APP_URL      = os.environ.get("APP_URL", "http://localhost:5000")
 
 # ── Email ──────────────────────────────────────────────────────────────────────
@@ -58,13 +59,40 @@ def send_verification_email(to_email, username, token):
     html       = _email_html(username, verify_url)
     text       = f"Hola {username},\n\nVerificá tu cuenta:\n{verify_url}\n\nExpira en 24 hs.\n\nDation"
 
-    # ── Resend API (preferido en Railway) ─────────────────────────────────────
+    # ── SendGrid API ───────────────────────────────────────────────────────────
+    if SENDGRID_API_KEY:
+        try:
+            _from = next((x for x in [SMTP_FROM, SMTP_USER] if x and "@" in x), "administracion@dation.com.ar")
+            payload = json.dumps({
+                "personalizations": [{"to": [{"email": to_email}]}],
+                "from": {"email": _from, "name": "Dation"},
+                "subject": subject,
+                "content": [
+                    {"type": "text/plain", "value": text},
+                    {"type": "text/html",  "value": html},
+                ],
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.sendgrid.com/v3/mail/send",
+                data=payload,
+                headers={
+                    "Authorization": f"Bearer {SENDGRID_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return resp.status == 202
+        except Exception as e:
+            app.logger.error(f"SendGrid error: {e}")
+            return False
+
+    # ── Resend API ─────────────────────────────────────────────────────────────
     if RESEND_API_KEY:
         try:
             _email = next((x for x in [SMTP_FROM, SMTP_USER] if x and "@" in x), "noreply@dation.com.ar")
-            from_addr = f"Dation <{_email}>"
             payload = json.dumps({
-                "from": from_addr,
+                "from": f"Dation <{_email}>",
                 "to": [to_email],
                 "subject": subject,
                 "html": html,
@@ -1066,10 +1094,8 @@ def admin_index():
 @admin_required
 def admin_test_email():
     results = []
-    results.append(f"RESEND_API_KEY: {'configurado' if RESEND_API_KEY else 'NO configurado'}")
-    results.append(f"SMTP_HOST: '{SMTP_HOST}'")
-    results.append(f"SMTP_FROM: '{SMTP_FROM}'")
-    results.append(f"APP_URL:   '{APP_URL}'")
+    results.append(f"SENDGRID_API_KEY: {'configurado' if SENDGRID_API_KEY else 'NO configurado'}")
+    results.append(f"APP_URL: '{APP_URL}'")
     results.append("---")
 
     to_email = request.args.get("to") or current_user.email or SMTP_USER
@@ -1079,41 +1105,36 @@ def admin_test_email():
 
     results.append(f"Destino: {to_email}")
 
-    if RESEND_API_KEY:
-        _email = SMTP_FROM if "@" in (SMTP_FROM or "") else (SMTP_USER or "noreply@dation.com.ar")
-        from_addr = f"Dation <{_email}>"
-        results.append(f"From: {from_addr}")
-        results.append(f"Probando Resend API → {to_email}")
+    if SENDGRID_API_KEY:
+        _from = next((x for x in [SMTP_FROM, SMTP_USER] if x and "@" in x), "administracion@dation.com.ar")
+        results.append(f"From: {_from}")
+        results.append(f"Probando SendGrid API...")
         try:
             payload = json.dumps({
-                "from": from_addr,
-                "to": [to_email],
+                "personalizations": [{"to": [{"email": to_email}]}],
+                "from": {"email": _from, "name": "Dation"},
                 "subject": "Test email – Dation",
-                "text": "Este es un email de prueba enviado desde Dation vía Resend.",
+                "content": [{"type": "text/plain", "value": "Test de envio desde Dation via SendGrid. OK!"}],
             }).encode()
             req = urllib.request.Request(
-                "https://api.resend.com/emails",
+                "https://api.sendgrid.com/v3/mail/send",
                 data=payload,
                 headers={
-                    "Authorization": f"Bearer {RESEND_API_KEY}",
+                    "Authorization": f"Bearer {SENDGRID_API_KEY}",
                     "Content-Type": "application/json",
                 },
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                body = resp.read().decode()
-                results.append(f"Resend OK (status {resp.status}): {body}")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                results.append(f"SendGrid OK (status {resp.status})")
         except urllib.error.HTTPError as e:
             body = e.read().decode()
-            server = e.headers.get("server", "?")
-            cf_ray = e.headers.get("cf-ray", "")
-            results.append(f"Resend ERROR {e.code}: {body}")
-            results.append(f"Server: {server} | CF-Ray: {cf_ray}")
+            results.append(f"SendGrid ERROR {e.code}: {body}")
         except Exception as e:
-            results.append(f"Resend ERROR: {type(e).__name__}: {e}")
+            results.append(f"SendGrid ERROR: {type(e).__name__}: {e}")
     else:
         import ssl
-        results.append("RESEND_API_KEY no configurado, probando SMTP...")
+        results.append("SENDGRID_API_KEY no configurado, probando SMTP...")
         if not SMTP_HOST or not SMTP_USER:
             results.append("ERROR: Variables SMTP no configuradas.")
         else:
