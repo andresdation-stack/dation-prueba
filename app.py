@@ -561,14 +561,18 @@ def admin_usuarios():
         ORDER BY u.username
     """)
     empresas = db_get("SELECT id, nombre FROM empresas ORDER BY nombre")
-    dispositivos = db_get("""
-        SELECT id, nombre, device_id, icon, empresa_id
-        FROM dispositivos ORDER BY nombre
-    """)
-    permisos_raw = db_get("SELECT usuario_id, dispositivo_id FROM usuario_dispositivos")
-    permisos = {}
-    for p in (permisos_raw or []):
-        permisos.setdefault(p["usuario_id"], []).append(p["dispositivo_id"])
+    try:
+        dispositivos = [dict(d) for d in (db_get("""
+            SELECT id, nombre, device_id, icon, empresa_id
+            FROM dispositivos ORDER BY nombre
+        """) or [])]
+        permisos_raw = db_get("SELECT usuario_id, dispositivo_id FROM usuario_dispositivos") or []
+        permisos = {}
+        for p in permisos_raw:
+            permisos.setdefault(str(p["usuario_id"]), []).append(p["dispositivo_id"])
+    except Exception:
+        dispositivos = []
+        permisos = {}
     return render_template("admin/usuarios.html", usuarios=usuarios, empresas=empresas,
                            dispositivos=dispositivos, permisos=permisos)
 

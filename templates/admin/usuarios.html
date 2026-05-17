@@ -331,7 +331,7 @@
     }
 
     const dispEmpresa = todosDispositivos.filter(d => d.empresa_id == u.empresa_id);
-    const actuales    = permisosPorUsuario[u.id] || [];
+    const actuales    = permisosPorUsuario[String(u.id)] || [];
 
     if (!dispEmpresa.length) {
       container.innerHTML = `
