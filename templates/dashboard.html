@@ -35,7 +35,7 @@
        data-search="{{ d.nombre|lower }} {{ (d.empresa_nombre or '')|lower }} {{ e_nombre|lower }}">
       <div style="position:relative;margin-bottom:14px">
         <div class="status-dot {{ 'online' if d.online else 'offline' }}" style="position:absolute;top:0;right:0"></div>
-        <div class="card-icon" style="background:{{ e_color }}22;color:{{ e_color }};margin:0 auto">
+        <div class="card-icon" style="color:{{ e_color }};margin:0 auto">
           <i class="fas {{ d.icon }}"></i>
         </div>
       </div>
