@@ -276,6 +276,27 @@ def about():
 def health():
     return "ok", 200
 
+@app.get("/debug")
+def debug():
+    import sys
+    info = {
+        "python": sys.version,
+        "db_url_set": bool(DATABASE_URL),
+        "db_url_prefix": DATABASE_URL[:20] + "..." if DATABASE_URL else None,
+    }
+    try:
+        conn = _conn()
+        conn.close()
+        info["db_connect"] = "ok"
+    except Exception as e:
+        info["db_connect"] = str(e)
+    try:
+        rows = db_get("SELECT tablename FROM pg_tables WHERE schemaname='public'")
+        info["tables"] = [r["tablename"] for r in rows]
+    except Exception as e:
+        info["tables"] = str(e)
+    return jsonify(info)
+
 @app.get("/assets/<path:filename>")
 def assets(filename):
     return send_from_directory("assets", filename)
@@ -924,11 +945,20 @@ def forbidden(e):
 def not_found(e):
     return render_template("error.html", code=404, msg="Página no encontrada."), 404
 
+@app.errorhandler(500)
+def server_error(e):
+    return render_template("error.html", code=500, msg=f"Error interno: {e}"), 500
+
 # ── Startup ────────────────────────────────────────────────────────────────────
 
 with app.app_context():
     if DATABASE_URL:
-        init_db()
+        try:
+            init_db()
+        except Exception as e:
+            import traceback
+            print(f"[WARNING] init_db falló: {e}")
+            traceback.print_exc()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
