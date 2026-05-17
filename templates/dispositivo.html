@@ -119,10 +119,40 @@
     <div class="detail-card" style="grid-column: span 2">
       <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center">
         <span><i class="fas fa-bell"></i> Horarios del timbre</span>
-        <button type="button" class="btn btn-primary" style="font-size:12px" onclick="abrirAgregar()">
-          <i class="fas fa-plus"></i> Agregar
-        </button>
+        <div style="display:flex;gap:8px">
+          {% if timbre_cfg %}
+            {% if timbre_cfg.pausado %}
+            <form method="POST" action="{{ url_for('dispositivo_timbre_reanudar', device_id=d.id) }}" style="display:inline">
+              <button type="submit" class="btn btn-primary" style="font-size:12px;background:#4ade80;border-color:#4ade80;color:#000">
+                <i class="fas fa-play"></i> Reanudar
+              </button>
+            </form>
+            {% else %}
+            <button type="button" class="btn btn-secondary" style="font-size:12px" onclick="abrirPausa()">
+              <i class="fas fa-pause"></i> Pausar
+            </button>
+            {% endif %}
+          {% endif %}
+          <button type="button" class="btn btn-primary" style="font-size:12px" onclick="abrirAgregar()">
+            <i class="fas fa-plus"></i> Agregar
+          </button>
+        </div>
       </div>
+
+      <!-- Banner de pausa -->
+      {% if timbre_cfg and timbre_cfg.pausado %}
+      <div style="background:#431407;border:1px solid #9a3412;border-radius:8px;padding:10px 14px;margin-top:12px;display:flex;align-items:center;gap:10px;font-size:13px">
+        <i class="fas fa-pause-circle" style="color:#fb923c;font-size:16px;flex-shrink:0"></i>
+        <span>
+          <strong style="color:#fb923c">Timbre pausado</strong>
+          {% if timbre_cfg.pausado_hasta %}
+          — hasta las {{ timbre_cfg.pausado_hasta.strftime('%H:%M del %d/%m/%Y') }}
+          {% else %}
+          — indefinidamente
+          {% endif %}
+        </span>
+      </div>
+      {% endif %}
 
       <!-- Fila para agregar (oculta) -->
       <div id="rowAgregar" style="display:none;flex-direction:column;gap:10px;padding:14px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;margin-top:10px">
@@ -220,6 +250,114 @@
         </form>
       </div>
     </div>
+
+    <!-- Modal pausar -->
+    <div id="modalPausa" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+      <div class="modal" style="max-width:360px;width:90%">
+        <div class="modal-header">
+          <span class="modal-title"><i class="fas fa-pause"></i> Pausar timbre</span>
+          <button class="modal-close" onclick="cerrarPausa()"><i class="fas fa-times"></i></button>
+        </div>
+        <form method="POST" action="{{ url_for('dispositivo_timbre_pausar', device_id=d.id) }}">
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px" id="optIndefinido">
+              <input type="radio" name="tipo" value="indefinido" checked onchange="toggleHoras(false)" style="accent-color:var(--accent)"/>
+              <span><strong>Indefinidamente</strong><br><span style="font-size:12px;color:var(--text-muted)">Hasta que lo reanudes manualmente</span></span>
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px" id="optHoras">
+              <input type="radio" name="tipo" value="horas" onchange="toggleHoras(true)" style="accent-color:var(--accent)"/>
+              <span>Por <input type="number" name="horas" id="inputHoras" value="1" min="1" max="72" style="width:55px;font-size:14px;font-weight:600;margin:0 4px" onclick="this.parentElement.previousElementSibling.checked=true;toggleHoras(true)"/> hora(s)</span>
+            </label>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarPausa()">Cancelar</button>
+            <button type="submit" class="btn btn-primary" style="background:#fb923c;border-color:#fb923c"><i class="fas fa-pause"></i> Pausar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Feriados -->
+    <div class="detail-card">
+      <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span><i class="fas fa-calendar-times"></i> Feriados</span>
+        <button type="button" class="btn btn-secondary" style="font-size:12px" onclick="toggleFeriado()">
+          <i class="fas fa-plus"></i>
+        </button>
+      </div>
+      <div id="rowFeriado" style="display:none;padding:10px 0">
+        <form method="POST" action="{{ url_for('dispositivo_add_excepcion', device_id=d.id) }}" style="display:flex;flex-direction:column;gap:8px">
+          <input type="date" name="fecha" required style="font-size:13px"/>
+          <input type="text" name="descripcion" placeholder="Descripción (opcional)" style="font-size:13px"/>
+          <div style="display:flex;gap:8px">
+            <button type="submit" class="btn btn-primary" style="font-size:12px;padding:4px 12px">Guardar</button>
+            <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="toggleFeriado()">Cancelar</button>
+          </div>
+        </form>
+      </div>
+      {% if excepciones %}
+      <div>
+        {% for e in excepciones %}
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <i class="fas fa-calendar-day" style="color:var(--accent);font-size:12px;flex-shrink:0"></i>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">{{ e.fecha.strftime('%d/%m/%Y') }}</div>
+            {% if e.descripcion %}<div style="font-size:11px;color:var(--text-muted)">{{ e.descripcion }}</div>{% endif %}
+          </div>
+          <form method="POST" action="{{ url_for('dispositivo_delete_excepcion', device_id=d.id, eid=e.id) }}" style="display:inline" onsubmit="return confirm('¿Eliminar este feriado?')">
+            <button type="submit" class="btn-icon danger"><i class="fas fa-trash"></i></button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text-muted)">Sin feriados cargados</div>
+      {% endif %}
+    </div>
+
+    <!-- Vacaciones -->
+    <div class="detail-card">
+      <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span><i class="fas fa-umbrella-beach"></i> Vacaciones</span>
+        <button type="button" class="btn btn-secondary" style="font-size:12px" onclick="toggleVacacion()">
+          <i class="fas fa-plus"></i>
+        </button>
+      </div>
+      <div id="rowVacacion" style="display:none;padding:10px 0">
+        <form method="POST" action="{{ url_for('dispositivo_add_vacacion', device_id=d.id) }}" style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--text-muted)">Desde</span>
+            <input type="date" name="fecha_inicio" required style="font-size:13px;flex:1"/>
+            <span style="font-size:12px;color:var(--text-muted)">Hasta</span>
+            <input type="date" name="fecha_fin" required style="font-size:13px;flex:1"/>
+          </div>
+          <input type="text" name="descripcion" placeholder="Descripción (opcional)" style="font-size:13px"/>
+          <div style="display:flex;gap:8px">
+            <button type="submit" class="btn btn-primary" style="font-size:12px;padding:4px 12px">Guardar</button>
+            <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="toggleVacacion()">Cancelar</button>
+          </div>
+        </form>
+      </div>
+      {% if vacaciones %}
+      <div>
+        {% for v in vacaciones %}
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <i class="fas fa-calendar-week" style="color:var(--accent);font-size:12px;flex-shrink:0"></i>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">{{ v.fecha_inicio.strftime('%d/%m') }} – {{ v.fecha_fin.strftime('%d/%m/%Y') }}</div>
+            {% if v.descripcion %}<div style="font-size:11px;color:var(--text-muted)">{{ v.descripcion }}</div>{% endif %}
+          </div>
+          <form method="POST" action="{{ url_for('dispositivo_delete_vacacion', device_id=d.id, vid=v.id) }}" style="display:inline" onsubmit="return confirm('¿Eliminar estas vacaciones?')">
+            <button type="submit" class="btn-icon danger"><i class="fas fa-trash"></i></button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text-muted)">Sin períodos de vacaciones</div>
+      {% endif %}
+    </div>
+
     {% endif %}
 
     <!-- Admin actions -->
@@ -265,8 +403,7 @@
     });
     document.getElementById('formEditarHorario').action =
       '/dispositivo/{{ d.id }}/horario/' + id + '/edit';
-    const modal = document.getElementById('modalEditarHorario');
-    modal.style.display = 'flex';
+    document.getElementById('modalEditarHorario').style.display = 'flex';
   }
   function cerrarEditarHorario() {
     document.getElementById('modalEditarHorario').style.display = 'none';
@@ -274,5 +411,27 @@
   document.getElementById('modalEditarHorario')?.addEventListener('click', e => {
     if (e.target === e.currentTarget) cerrarEditarHorario();
   });
+
+  function abrirPausa() {
+    document.getElementById('modalPausa').style.display = 'flex';
+  }
+  function cerrarPausa() {
+    document.getElementById('modalPausa').style.display = 'none';
+  }
+  function toggleHoras(show) {
+    document.getElementById('inputHoras').disabled = !show;
+  }
+  document.getElementById('modalPausa')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget) cerrarPausa();
+  });
+
+  function toggleFeriado() {
+    const r = document.getElementById('rowFeriado');
+    r.style.display = r.style.display === 'none' ? 'block' : 'none';
+  }
+  function toggleVacacion() {
+    const r = document.getElementById('rowVacacion');
+    r.style.display = r.style.display === 'none' ? 'block' : 'none';
+  }
 </script>
 {% endblock %}

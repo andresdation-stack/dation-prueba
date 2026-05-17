@@ -306,6 +306,8 @@ def init_db():
                 )
             """)
             # Migraciones de columnas nuevas
+            cur.execute("ALTER TABLE timbre_config ADD COLUMN IF NOT EXISTS pausado BOOLEAN DEFAULT FALSE")
+            cur.execute("ALTER TABLE timbre_config ADD COLUMN IF NOT EXISTS pausado_hasta TIMESTAMP")
             cur.execute("ALTER TABLE timbre_horarios ADD COLUMN IF NOT EXISTS dias_semana INTEGER[] DEFAULT '{1,2,3,4,5}'")
             cur.execute("ALTER TABLE timbre_horarios ADD COLUMN IF NOT EXISTS duracion_seg INTEGER DEFAULT 3")
             cur.execute("""
@@ -463,6 +465,23 @@ _TIPO_COLS = """
     t.nombre AS tipo_nombre
 """
 
+def _device_for_user(device_id):
+    if current_user.is_admin:
+        return db_one(f"""
+            SELECT d.*, {_TIPO_COLS}
+            FROM dispositivos d
+            LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
+            WHERE d.id = %s
+        """, (device_id,))
+    return db_one(f"""
+        SELECT d.*, {_TIPO_COLS}
+        FROM dispositivos d
+        LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
+        INNER JOIN usuario_dispositivos ud ON ud.dispositivo_id = d.id AND ud.usuario_id = %s
+        WHERE d.id = %s
+    """, (current_user.id, device_id))
+
+
 @app.get("/dispositivo/<int:device_id>")
 @login_required
 def dispositivo_detail(device_id):
@@ -502,13 +521,23 @@ def dispositivo_detail(device_id):
 
     horarios = []
     timbre_cfg = None
+    excepciones = []
+    vacaciones = []
     if d and d.get("tiene_horarios"):
         timbre_cfg = db_one("SELECT * FROM timbre_config WHERE device_id = %s", (d["device_id"],))
         horarios = db_get("SELECT * FROM timbre_horarios WHERE device_id = %s ORDER BY hora", (d["device_id"],))
+        excepciones = db_get("SELECT * FROM timbre_excepciones WHERE device_id = %s ORDER BY fecha", (d["device_id"],))
+        vacaciones = db_get("SELECT * FROM timbre_vacaciones WHERE device_id = %s ORDER BY fecha_inicio", (d["device_id"],))
+        # Auto-expire pause
+        if timbre_cfg and timbre_cfg.get("pausado") and timbre_cfg.get("pausado_hasta"):
+            if timbre_cfg["pausado_hasta"] < now:
+                db_run("UPDATE timbre_config SET pausado=FALSE, pausado_hasta=NULL, config_version=config_version+1, config_acked=FALSE, updated_at=NOW() WHERE device_id=%s", (d["device_id"],))
+                timbre_cfg = db_one("SELECT * FROM timbre_config WHERE device_id = %s", (d["device_id"],))
 
     return render_template("dispositivo.html", d=d, hb=hb, nodo=nodo,
                            online=online, last_data=last_data,
-                           horarios=horarios, timbre_cfg=timbre_cfg)
+                           horarios=horarios, timbre_cfg=timbre_cfg,
+                           excepciones=excepciones, vacaciones=vacaciones)
 
 
 @app.route("/dispositivo/<int:device_id>/horarios", methods=["GET", "POST"])
@@ -567,21 +596,7 @@ def timbre_horarios_usuario(device_id):
 @app.post("/dispositivo/<int:device_id>/horario")
 @login_required
 def dispositivo_add_horario(device_id):
-    if current_user.is_admin:
-        d = db_one(f"""
-            SELECT d.*, {_TIPO_COLS}
-            FROM dispositivos d
-            LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
-            WHERE d.id = %s
-        """, (device_id,))
-    else:
-        d = db_one(f"""
-            SELECT d.*, {_TIPO_COLS}
-            FROM dispositivos d
-            LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
-            INNER JOIN usuario_dispositivos ud ON ud.dispositivo_id = d.id AND ud.usuario_id = %s
-            WHERE d.id = %s
-        """, (current_user.id, device_id))
+    d = _device_for_user(device_id)
     if not d or not d.get("tiene_horarios"):
         abort(404)
     hora = request.form.get("hora", "").strip()
@@ -609,10 +624,7 @@ def dispositivo_add_horario(device_id):
 @app.post("/dispositivo/<int:device_id>/horario/<int:hid>/edit")
 @login_required
 def dispositivo_edit_horario(device_id, hid):
-    if current_user.is_admin:
-        d = db_one(f"SELECT d.*, {_TIPO_COLS} FROM dispositivos d LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id WHERE d.id = %s", (device_id,))
-    else:
-        d = db_one(f"SELECT d.*, {_TIPO_COLS} FROM dispositivos d LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id INNER JOIN usuario_dispositivos ud ON ud.dispositivo_id = d.id AND ud.usuario_id = %s WHERE d.id = %s", (current_user.id, device_id))
+    d = _device_for_user(device_id)
     if not d or not d.get("tiene_horarios"):
         abort(404)
     hora = request.form.get("hora", "").strip()
@@ -638,16 +650,109 @@ def dispositivo_edit_horario(device_id, hid):
 @app.post("/dispositivo/<int:device_id>/horario/<int:hid>/delete")
 @login_required
 def dispositivo_delete_horario(device_id, hid):
-    if current_user.is_admin:
-        d = db_one(f"SELECT d.*, {_TIPO_COLS} FROM dispositivos d LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id WHERE d.id = %s", (device_id,))
-    else:
-        d = db_one(f"SELECT d.*, {_TIPO_COLS} FROM dispositivos d LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id INNER JOIN usuario_dispositivos ud ON ud.dispositivo_id = d.id AND ud.usuario_id = %s WHERE d.id = %s", (current_user.id, device_id))
+    d = _device_for_user(device_id)
     if not d or not d.get("tiene_horarios"):
         abort(404)
     db_run("DELETE FROM timbre_horarios WHERE id = %s AND device_id = %s", (hid, d["device_id"]))
     db_run("UPDATE timbre_config SET config_version = config_version + 1, config_acked = FALSE, updated_at = NOW() WHERE device_id = %s",
            (d["device_id"],))
     flash("Horario eliminado.", "success")
+    return redirect(url_for("dispositivo_detail", device_id=device_id))
+
+
+@app.post("/dispositivo/<int:device_id>/timbre/pausar")
+@login_required
+def dispositivo_timbre_pausar(device_id):
+    d = _device_for_user(device_id)
+    if not d or not d.get("tiene_horarios"):
+        abort(404)
+    tipo = request.form.get("tipo", "indefinido")
+    horas = int(request.form.get("horas") or 0)
+    hasta = None
+    if tipo == "horas" and horas > 0:
+        hasta = datetime.utcnow() + timedelta(hours=horas)
+    db_run("""
+        UPDATE timbre_config SET pausado=TRUE, pausado_hasta=%s,
+        config_version=config_version+1, config_acked=FALSE, updated_at=NOW()
+        WHERE device_id=%s
+    """, (hasta, d["device_id"]))
+    flash("Timbre pausado.", "success")
+    return redirect(url_for("dispositivo_detail", device_id=device_id))
+
+
+@app.post("/dispositivo/<int:device_id>/timbre/reanudar")
+@login_required
+def dispositivo_timbre_reanudar(device_id):
+    d = _device_for_user(device_id)
+    if not d or not d.get("tiene_horarios"):
+        abort(404)
+    db_run("""
+        UPDATE timbre_config SET pausado=FALSE, pausado_hasta=NULL,
+        config_version=config_version+1, config_acked=FALSE, updated_at=NOW()
+        WHERE device_id=%s
+    """, (d["device_id"],))
+    flash("Timbre reanudado.", "success")
+    return redirect(url_for("dispositivo_detail", device_id=device_id))
+
+
+@app.post("/dispositivo/<int:device_id>/excepcion")
+@login_required
+def dispositivo_add_excepcion(device_id):
+    d = _device_for_user(device_id)
+    if not d or not d.get("tiene_horarios"):
+        abort(404)
+    fecha = request.form.get("fecha", "").strip()
+    desc = request.form.get("descripcion", "").strip() or None
+    if fecha:
+        db_run("INSERT INTO timbre_excepciones (device_id, fecha, descripcion) VALUES (%s, %s, %s)",
+               (d["device_id"], fecha, desc))
+        db_run("UPDATE timbre_config SET config_version=config_version+1, config_acked=FALSE, updated_at=NOW() WHERE device_id=%s",
+               (d["device_id"],))
+        flash("Feriado agregado.", "success")
+    return redirect(url_for("dispositivo_detail", device_id=device_id))
+
+
+@app.post("/dispositivo/<int:device_id>/excepcion/<int:eid>/delete")
+@login_required
+def dispositivo_delete_excepcion(device_id, eid):
+    d = _device_for_user(device_id)
+    if not d or not d.get("tiene_horarios"):
+        abort(404)
+    db_run("DELETE FROM timbre_excepciones WHERE id=%s AND device_id=%s", (eid, d["device_id"]))
+    db_run("UPDATE timbre_config SET config_version=config_version+1, config_acked=FALSE, updated_at=NOW() WHERE device_id=%s",
+           (d["device_id"],))
+    flash("Feriado eliminado.", "success")
+    return redirect(url_for("dispositivo_detail", device_id=device_id))
+
+
+@app.post("/dispositivo/<int:device_id>/vacacion")
+@login_required
+def dispositivo_add_vacacion(device_id):
+    d = _device_for_user(device_id)
+    if not d or not d.get("tiene_horarios"):
+        abort(404)
+    inicio = request.form.get("fecha_inicio", "").strip()
+    fin = request.form.get("fecha_fin", "").strip()
+    desc = request.form.get("descripcion", "").strip() or None
+    if inicio and fin:
+        db_run("INSERT INTO timbre_vacaciones (device_id, fecha_inicio, fecha_fin, descripcion) VALUES (%s, %s, %s, %s)",
+               (d["device_id"], inicio, fin, desc))
+        db_run("UPDATE timbre_config SET config_version=config_version+1, config_acked=FALSE, updated_at=NOW() WHERE device_id=%s",
+               (d["device_id"],))
+        flash("Vacaciones agregadas.", "success")
+    return redirect(url_for("dispositivo_detail", device_id=device_id))
+
+
+@app.post("/dispositivo/<int:device_id>/vacacion/<int:vid>/delete")
+@login_required
+def dispositivo_delete_vacacion(device_id, vid):
+    d = _device_for_user(device_id)
+    if not d or not d.get("tiene_horarios"):
+        abort(404)
+    db_run("DELETE FROM timbre_vacaciones WHERE id=%s AND device_id=%s", (vid, d["device_id"]))
+    db_run("UPDATE timbre_config SET config_version=config_version+1, config_acked=FALSE, updated_at=NOW() WHERE device_id=%s",
+           (d["device_id"],))
+    flash("Vacaciones eliminadas.", "success")
     return redirect(url_for("dispositivo_detail", device_id=device_id))
 
 
@@ -713,8 +818,15 @@ def device_config_get(device_id):
         horarios = db_get("SELECT hora, dias_semana, duracion_seg FROM timbre_horarios WHERE device_id = %s AND activo = TRUE ORDER BY hora", (device_id,))
         excepciones = db_get("SELECT fecha FROM timbre_excepciones WHERE device_id = %s ORDER BY fecha", (device_id,))
         vacaciones = db_get("SELECT fecha_inicio, fecha_fin FROM timbre_vacaciones WHERE device_id = %s ORDER BY fecha_inicio", (device_id,))
+        now_utc = datetime.utcnow()
+        pausado = bool(tc.get("pausado"))
+        pausado_hasta = tc.get("pausado_hasta")
+        if pausado and pausado_hasta and pausado_hasta < now_utc:
+            pausado = False
         config["timbre"] = {
             "version": tc["config_version"],
+            "pausado": pausado,
+            "pausado_hasta": pausado_hasta.isoformat() if pausado_hasta and pausado else None,
             "horarios": [
                 {
                     "hora": h["hora"].strftime("%H:%M"),

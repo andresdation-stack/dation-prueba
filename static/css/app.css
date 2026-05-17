@@ -163,8 +163,8 @@ a:hover { color: var(--accent-dark); }
   flex-shrink: 0;
 }
 
-.user-name { font-size: 13px; font-weight: 600; color: var(--text); }
-.user-role { font-size: 11px; color: var(--text-muted); }
+.user-name { font-size: 13px; font-weight: 600; color: #f4f4f5; }
+.user-role { font-size: 11px; color: var(--sidebar-text); }
 
 .theme-toggle {
   display: flex;
