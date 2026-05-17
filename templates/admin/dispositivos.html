@@ -1,6 +1,58 @@
 {% extends "app_base.html" %}
 {% block title %}Dispositivos – Admin{% endblock %}
 
+{% block head %}
+<style>
+  .icon-picker-trigger {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    background: var(--surface);
+    font-size: 14px;
+    color: var(--text);
+    transition: border-color 0.2s;
+    user-select: none;
+  }
+  .icon-picker-trigger:hover { border-color: var(--accent); }
+  .icon-picker-trigger i.preview { font-size: 16px; color: var(--accent); width: 18px; text-align: center; }
+  .icon-picker-trigger .trigger-label { flex: 1; color: var(--text-muted); font-size: 13px; }
+  .icon-picker-trigger .chevron { opacity: 0.4; font-size: 11px; }
+
+  .icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 6px;
+    max-height: 380px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .icon-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: all 0.15s;
+    text-align: center;
+    line-height: 1.2;
+  }
+  .icon-option:hover { border-color: var(--accent); color: var(--accent); background: var(--surface2); }
+  .icon-option i { font-size: 18px; }
+  .icon-search-wrap { margin-bottom: 14px; }
+  .icon-search-wrap input { width: 100%; box-sizing: border-box; }
+  .no-icons { text-align: center; color: var(--text-muted); padding: 40px 0; font-size: 13px; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
   <div>
@@ -74,6 +126,17 @@
   </div>
 </div>
 
+{# ── Macros ──────────────────────────────────────────────────────────────── #}
+
+{% macro icon_trigger(p, field, default_icon) %}
+<div class="icon-picker-trigger" onclick="openIconPicker('{{ p }}_{{ field }}')">
+  <i class="fas {{ default_icon }} preview" id="{{ p }}_{{ field }}_preview"></i>
+  <span class="trigger-label" id="{{ p }}_{{ field }}_label">{{ default_icon }}</span>
+  <i class="fas fa-chevron-down chevron"></i>
+</div>
+<input type="hidden" name="{{ field }}" id="{{ p }}_{{ field }}" value="{{ default_icon }}"/>
+{% endmacro %}
+
 {% macro sensor_fields(p, i) %}
 <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px" id="{{ p }}_s{{ i }}_block">
   <div class="form-check" style="margin-bottom:8px">
@@ -88,8 +151,8 @@
         <input type="text" name="sensor{{ i }}_nombre" id="{{ p }}_sensor{{ i }}_nombre"/>
       </div>
       <div class="form-group">
-        <label>Ícono FA</label>
-        <input type="text" name="sensor{{ i }}_icon" id="{{ p }}_sensor{{ i }}_icon" placeholder="fa-tachometer-alt"/>
+        <label>Ícono</label>
+        {{ icon_trigger(p, 'sensor'~i~'_icon', 'fa-tachometer-alt') }}
       </div>
       <div class="form-group">
         <label>Factor corrección</label>
@@ -118,8 +181,8 @@
     </select>
   </div>
   <div class="form-group span-2">
-    <label>Ícono Font Awesome</label>
-    <input type="text" name="icon" id="{{ p }}_icon" placeholder="fa-microchip"/>
+    <label>Ícono del dispositivo</label>
+    {{ icon_trigger(p, 'icon', 'fa-microchip') }}
   </div>
 </div>
 
@@ -145,6 +208,8 @@
 <div class="form-section">Sensores</div>
 {% for i in range(1,6) %}{{ sensor_fields(p, i) }}{% endfor %}
 {% endmacro %}
+
+{# ── Modales principales ─────────────────────────────────────────────────── #}
 
 <!-- Modal Crear -->
 <div class="modal-backdrop" id="modalCrear">
@@ -245,12 +310,28 @@
     </form>
   </div>
 </div>
+
+<!-- Modal Icon Picker -->
+<div class="modal-backdrop" id="modalIconPicker" style="z-index:1050">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-icons" style="margin-right:8px"></i>Seleccionar ícono</span>
+      <button class="modal-close" onclick="closeIconPicker()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="icon-search-wrap">
+        <input type="text" class="search-input" id="iconSearch" placeholder="Buscar ícono..." oninput="filterIcons()" style="width:100%;box-sizing:border-box"/>
+      </div>
+      <div class="icon-grid" id="iconGrid"></div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-  const permisosPorUsuario = {{ permisos|tojson }};
-
+  // ── Tabla search ──────────────────────────────────────────────────────────
   document.getElementById('searchInput').addEventListener('input', function() {
     const q = this.value.toLowerCase();
     document.querySelectorAll('#tablaDisp tbody tr').forEach(row => {
@@ -258,24 +339,24 @@
     });
   });
 
+  // ── Toggle helpers ────────────────────────────────────────────────────────
   function toggleSensor(p, i) {
     const cb = document.getElementById(`${p}_tiene_sensor${i}`);
     const opts = document.getElementById(`${p}_sensor${i}_opts`);
     if (opts) opts.style.display = cb.checked ? '' : 'none';
   }
-
   function toggleCaudal(p) {
     const cb = document.getElementById(`${p}_caudal`);
     const opts = document.getElementById(`${p}_caudal_opts`);
     if (opts) opts.style.display = cb.checked ? '' : 'none';
   }
-
   function toggleMaquina(p) {
     const cb = document.getElementById(`${p}_maquina`);
     const opts = document.getElementById(`${p}_maquina_opts`);
     if (opts) opts.style.display = cb.checked ? '' : 'none';
   }
 
+  // ── Generic field setter ──────────────────────────────────────────────────
   function setVal(id, val) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -283,13 +364,25 @@
     else el.value = val ?? '';
   }
 
+  // ── Icon field setter (updates hidden input + trigger preview) ────────────
+  function setIconVal(inputId, icon) {
+    const ic = icon || 'fa-microchip';
+    const input = document.getElementById(inputId);
+    if (input) input.value = ic;
+    const preview = document.getElementById(inputId + '_preview');
+    if (preview) preview.className = `fas ${ic} preview`;
+    const label = document.getElementById(inputId + '_label');
+    if (label) label.textContent = ic;
+  }
+
+  // ── Edit dispositivo ──────────────────────────────────────────────────────
   function editarDisp(d) {
     const p = 'e';
     document.getElementById('e_id').value = d.id;
     setVal(`${p}_nombre`, d.nombre);
     setVal(`${p}_device_id`, d.device_id);
-    setVal(`${p}_icon`, d.icon);
     setVal(`${p}_empresa_id`, d.empresa_id);
+    setIconVal(`${p}_icon`, d.icon || 'fa-microchip');
     setVal(`${p}_gps`, d.tiene_gps);
     setVal(`${p}_caudal`, d.tiene_caudal);
     setVal(`${p}_caudal_factor`, d.caudal_factor);
@@ -300,7 +393,7 @@
     for (let i = 1; i <= 5; i++) {
       setVal(`${p}_tiene_sensor${i}`, d[`tiene_sensor${i}`]);
       setVal(`${p}_sensor${i}_nombre`, d[`sensor${i}_nombre`]);
-      setVal(`${p}_sensor${i}_icon`, d[`sensor${i}_icon`]);
+      setIconVal(`${p}_sensor${i}_icon`, d[`sensor${i}_icon`] || 'fa-tachometer-alt');
       setVal(`${p}_sensor${i}_factor`, d[`sensor${i}_factor`]);
       toggleSensor(p, i);
     }
@@ -313,6 +406,8 @@
     openModal('modalEliminar');
   }
 
+  // ── Permisos ──────────────────────────────────────────────────────────────
+  const permisosPorUsuario = {{ permisos|tojson }};
   function mostrarPermisos() {
     const sel = document.getElementById('perm_usuario');
     const uid = parseInt(sel.value);
@@ -321,5 +416,81 @@
       cb.checked = permisos.includes(parseInt(cb.value));
     });
   }
+
+  // ── Icon Picker ───────────────────────────────────────────────────────────
+  const ICONS = [
+    // Vehículos y maquinaria
+    'fa-tractor','fa-truck','fa-car','fa-motorcycle','fa-ship','fa-helicopter',
+    'fa-plane','fa-bus','fa-train','fa-bicycle',
+    // Industrial / construcción
+    'fa-industry','fa-warehouse','fa-building','fa-home','fa-cog','fa-cogs',
+    'fa-gears','fa-tools','fa-wrench','fa-hammer','fa-hard-hat','fa-screwdriver',
+    // Sensores / medición
+    'fa-tachometer-alt','fa-gauge','fa-thermometer-half','fa-temperature-high',
+    'fa-temperature-low','fa-ruler','fa-weight','fa-stopwatch','fa-clock',
+    'fa-chart-line','fa-chart-bar','fa-chart-pie','fa-signal','fa-sliders-h',
+    // Fluidos / clima
+    'fa-water','fa-tint','fa-wind','fa-fan','fa-cloud','fa-cloud-rain',
+    'fa-snowflake','fa-sun','fa-fire','fa-oil-can','fa-gas-pump',
+    // Energía / conectividad
+    'fa-bolt','fa-battery-full','fa-plug','fa-broadcast-tower','fa-wifi',
+    'fa-satellite-dish','fa-tower-cell','fa-microchip','fa-server','fa-database',
+    // Agro / naturaleza
+    'fa-seedling','fa-leaf','fa-tree','fa-spa','fa-sun','fa-mountain',
+    // Ubicación
+    'fa-map-marker-alt','fa-map','fa-compass','fa-crosshairs','fa-location-dot',
+    // General / alertas
+    'fa-bell','fa-exclamation-triangle','fa-check-circle','fa-info-circle',
+    'fa-robot','fa-mobile-alt','fa-desktop','fa-hdd','fa-camera','fa-lock',
+  ];
+
+  let _iconTargetId = null;
+
+  function openIconPicker(inputId) {
+    _iconTargetId = inputId;
+    document.getElementById('iconSearch').value = '';
+    renderIconGrid('');
+    openModal('modalIconPicker');
+  }
+
+  function closeIconPicker() {
+    closeModal('modalIconPicker');
+  }
+
+  function renderIconGrid(filter) {
+    const grid = document.getElementById('iconGrid');
+    const list = filter
+      ? ICONS.filter(ic => ic.replace('fa-','').includes(filter))
+      : ICONS;
+    if (!list.length) {
+      grid.innerHTML = '<div class="no-icons"><i class="fas fa-search" style="font-size:24px;margin-bottom:8px;display:block"></i>Sin resultados</div>';
+      return;
+    }
+    grid.innerHTML = list.map(ic => {
+      const label = ic.replace('fa-', '').replace(/-/g,' ');
+      return `<div class="icon-option" onclick="selectIcon('${ic}')" title="${ic}">
+        <i class="fas ${ic}"></i>
+        <span>${label}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function filterIcons() {
+    renderIconGrid(document.getElementById('iconSearch').value.toLowerCase().trim());
+  }
+
+  function selectIcon(ic) {
+    if (!_iconTargetId) return;
+    setIconVal(_iconTargetId, ic);
+    closeIconPicker();
+  }
+
+  // Escape en el icon picker cierra sólo él (no el modal padre)
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('modalIconPicker').classList.contains('open')) {
+      e.stopImmediatePropagation();
+      closeIconPicker();
+    }
+  }, true);
 </script>
 {% endblock %}
