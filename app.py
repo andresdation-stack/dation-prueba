@@ -1072,16 +1072,19 @@ def admin_test_email():
     results.append(f"APP_URL:   '{APP_URL}'")
     results.append("---")
 
-    to_email = current_user.email or SMTP_USER
+    to_email = request.args.get("to") or current_user.email or SMTP_USER
     if not to_email:
-        results.append("ERROR: no hay email destino (configurá email en tu usuario o SMTP_USER)")
+        results.append("ERROR: no hay email destino. Usá /admin/test-email?to=tu@email.com")
         return "<pre style='font-family:monospace;padding:20px'>" + "\n".join(results) + "</pre>", 200
 
+    results.append(f"Destino: {to_email}")
+
     if RESEND_API_KEY:
+        _email = SMTP_FROM if "@" in (SMTP_FROM or "") else (SMTP_USER or "noreply@dation.com.ar")
+        from_addr = f"Dation <{_email}>"
+        results.append(f"From: {from_addr}")
         results.append(f"Probando Resend API → {to_email}")
         try:
-            _email = SMTP_FROM if "@" in (SMTP_FROM or "") else (SMTP_USER or "noreply@dation.com.ar")
-            from_addr = f"Dation <{_email}>"
             payload = json.dumps({
                 "from": from_addr,
                 "to": [to_email],
