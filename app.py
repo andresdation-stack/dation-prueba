@@ -306,6 +306,8 @@ def init_db():
                 )
             """)
             # Migraciones de columnas nuevas
+            cur.execute("ALTER TABLE timbre_horarios ADD COLUMN IF NOT EXISTS dias_semana INTEGER[] DEFAULT '{1,2,3,4,5}'")
+            cur.execute("ALTER TABLE timbre_horarios ADD COLUMN IF NOT EXISTS duracion_seg INTEGER DEFAULT 3")
             cur.execute("""
                 ALTER TABLE dispositivos
                 ADD COLUMN IF NOT EXISTS configuracion_id INTEGER REFERENCES configuraciones(id) ON DELETE SET NULL
@@ -545,8 +547,12 @@ def timbre_horarios_usuario(device_id):
             if existe:
                 flash("Ese horario ya existe.", "error")
             else:
-                db_run("INSERT INTO timbre_horarios (device_id, hora) VALUES (%s, %s)",
-                       (d["device_id"], hora))
+                dias = [int(x) for x in request.form.getlist("dias") if x.isdigit()]
+                if not dias:
+                    dias = [1, 2, 3, 4, 5]
+                duracion = int(request.form.get("duracion_seg") or 3)
+                db_run("INSERT INTO timbre_horarios (device_id, hora, dias_semana, duracion_seg) VALUES (%s, %s, %s, %s)",
+                       (d["device_id"], hora, dias, duracion))
                 db_run("""
                     UPDATE timbre_config
                     SET config_version = config_version + 1, config_acked = FALSE, updated_at = NOW()
@@ -585,14 +591,63 @@ def dispositivo_add_horario(device_id):
         if existe:
             flash("Ese horario ya existe.", "error")
         else:
-            db_run("INSERT INTO timbre_horarios (device_id, hora) VALUES (%s, %s)",
-                   (d["device_id"], hora))
+            dias = [int(x) for x in request.form.getlist("dias") if x.isdigit()]
+            if not dias:
+                dias = [1, 2, 3, 4, 5]
+            duracion = int(request.form.get("duracion_seg") or 3)
+            db_run("INSERT INTO timbre_horarios (device_id, hora, dias_semana, duracion_seg) VALUES (%s, %s, %s, %s)",
+                   (d["device_id"], hora, dias, duracion))
             db_run("""
                 UPDATE timbre_config
                 SET config_version = config_version + 1, config_acked = FALSE, updated_at = NOW()
                 WHERE device_id = %s
             """, (d["device_id"],))
             flash("Horario agregado.", "success")
+    return redirect(url_for("dispositivo_detail", device_id=device_id))
+
+
+@app.post("/dispositivo/<int:device_id>/horario/<int:hid>/edit")
+@login_required
+def dispositivo_edit_horario(device_id, hid):
+    if current_user.is_admin:
+        d = db_one(f"SELECT d.*, {_TIPO_COLS} FROM dispositivos d LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id WHERE d.id = %s", (device_id,))
+    else:
+        d = db_one(f"SELECT d.*, {_TIPO_COLS} FROM dispositivos d LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id INNER JOIN usuario_dispositivos ud ON ud.dispositivo_id = d.id AND ud.usuario_id = %s WHERE d.id = %s", (current_user.id, device_id))
+    if not d or not d.get("tiene_horarios"):
+        abort(404)
+    hora = request.form.get("hora", "").strip()
+    if hora:
+        dias = [int(x) for x in request.form.getlist("dias") if x.isdigit()]
+        if not dias:
+            dias = [1, 2, 3, 4, 5]
+        duracion = int(request.form.get("duracion_seg") or 3)
+        # Check duplicate (same time, different row)
+        existe = db_one("SELECT id FROM timbre_horarios WHERE device_id = %s AND hora = %s AND id != %s",
+                        (d["device_id"], hora, hid))
+        if existe:
+            flash("Ya existe otro horario a esa hora.", "error")
+        else:
+            db_run("UPDATE timbre_horarios SET hora = %s, dias_semana = %s, duracion_seg = %s WHERE id = %s AND device_id = %s",
+                   (hora, dias, duracion, hid, d["device_id"]))
+            db_run("UPDATE timbre_config SET config_version = config_version + 1, config_acked = FALSE, updated_at = NOW() WHERE device_id = %s",
+                   (d["device_id"],))
+            flash("Horario actualizado.", "success")
+    return redirect(url_for("dispositivo_detail", device_id=device_id))
+
+
+@app.post("/dispositivo/<int:device_id>/horario/<int:hid>/delete")
+@login_required
+def dispositivo_delete_horario(device_id, hid):
+    if current_user.is_admin:
+        d = db_one(f"SELECT d.*, {_TIPO_COLS} FROM dispositivos d LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id WHERE d.id = %s", (device_id,))
+    else:
+        d = db_one(f"SELECT d.*, {_TIPO_COLS} FROM dispositivos d LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id INNER JOIN usuario_dispositivos ud ON ud.dispositivo_id = d.id AND ud.usuario_id = %s WHERE d.id = %s", (current_user.id, device_id))
+    if not d or not d.get("tiene_horarios"):
+        abort(404)
+    db_run("DELETE FROM timbre_horarios WHERE id = %s AND device_id = %s", (hid, d["device_id"]))
+    db_run("UPDATE timbre_config SET config_version = config_version + 1, config_acked = FALSE, updated_at = NOW() WHERE device_id = %s",
+           (d["device_id"],))
+    flash("Horario eliminado.", "success")
     return redirect(url_for("dispositivo_detail", device_id=device_id))
 
 
@@ -655,14 +710,19 @@ def device_config_get(device_id):
     }
     tc = db_one("SELECT * FROM timbre_config WHERE device_id = %s", (device_id,))
     if tc:
-        horarios = db_get("SELECT hora FROM timbre_horarios WHERE device_id = %s AND activo = TRUE ORDER BY hora", (device_id,))
+        horarios = db_get("SELECT hora, dias_semana, duracion_seg FROM timbre_horarios WHERE device_id = %s AND activo = TRUE ORDER BY hora", (device_id,))
         excepciones = db_get("SELECT fecha FROM timbre_excepciones WHERE device_id = %s ORDER BY fecha", (device_id,))
         vacaciones = db_get("SELECT fecha_inicio, fecha_fin FROM timbre_vacaciones WHERE device_id = %s ORDER BY fecha_inicio", (device_id,))
         config["timbre"] = {
             "version": tc["config_version"],
-            "duracion_seg": tc["duracion_seg"],
-            "dias_semana": tc["dias_semana"],
-            "horarios": [h["hora"].strftime("%H:%M") for h in horarios],
+            "horarios": [
+                {
+                    "hora": h["hora"].strftime("%H:%M"),
+                    "dias": h["dias_semana"] or [1, 2, 3, 4, 5],
+                    "duracion_seg": h["duracion_seg"] or 3,
+                }
+                for h in horarios
+            ],
             "excepciones": [str(e["fecha"]) for e in excepciones],
             "vacaciones": [{"inicio": str(v["fecha_inicio"]), "fin": str(v["fecha_fin"])} for v in vacaciones],
         }

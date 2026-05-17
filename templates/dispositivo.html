@@ -119,25 +119,32 @@
     <div class="detail-card" style="grid-column: span 2">
       <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center">
         <span><i class="fas fa-bell"></i> Horarios del timbre</span>
-        <div style="display:flex;gap:8px">
-          <button type="button" class="btn btn-primary" style="font-size:12px" onclick="abrirAgregar()">
-            <i class="fas fa-plus"></i> Agregar
-          </button>
-          {% if current_user.is_admin %}
-          <a href="{{ url_for('admin_timbre', device_id=d.device_id) }}" class="btn btn-secondary" style="font-size:12px">
-            <i class="fas fa-cog"></i> Configurar
-          </a>
-          {% endif %}
-        </div>
+        <button type="button" class="btn btn-primary" style="font-size:12px" onclick="abrirAgregar()">
+          <i class="fas fa-plus"></i> Agregar
+        </button>
       </div>
 
       <!-- Fila para agregar (oculta) -->
-      <div id="rowAgregar" style="display:none;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;margin-top:10px">
-        <i class="fas fa-clock" style="color:var(--accent);font-size:13px"></i>
-        <form method="POST" action="{{ url_for('dispositivo_add_horario', device_id=d.id) }}" style="display:flex;align-items:center;gap:8px;flex:1">
-          <input type="time" name="hora" id="inputHora" required style="font-size:15px;font-weight:600;width:110px"/>
-          <button type="submit" class="btn btn-primary" style="font-size:12px;padding:4px 12px">Guardar</button>
-          <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="cancelarAgregar()">Cancelar</button>
+      <div id="rowAgregar" style="display:none;flex-direction:column;gap:10px;padding:14px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;margin-top:10px">
+        <form method="POST" action="{{ url_for('dispositivo_add_horario', device_id=d.id) }}">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+            <i class="fas fa-clock" style="color:var(--accent)"></i>
+            <input type="time" name="hora" id="inputHora" required style="font-size:15px;font-weight:600;width:110px"/>
+            <span style="font-size:12px;color:var(--text-muted)">Duración:</span>
+            <input type="number" name="duracion_seg" value="3" min="1" max="60" style="width:60px;font-size:13px"/> s
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:10px">
+            {% for num, lbl in [(1,'L'),(2,'M'),(3,'X'),(4,'J'),(5,'V'),(6,'S'),(7,'D')] %}
+            <label style="display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+              <input type="checkbox" name="dias" value="{{ num }}" {% if num <= 5 %}checked{% endif %} style="accent-color:var(--accent)"/>
+              {{ lbl }}
+            </label>
+            {% endfor %}
+          </div>
+          <div style="display:flex;gap:8px">
+            <button type="submit" class="btn btn-primary" style="font-size:12px;padding:4px 14px">Guardar</button>
+            <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 14px" onclick="cancelarAgregar()">Cancelar</button>
+          </div>
         </form>
       </div>
 
@@ -147,7 +154,25 @@
         {% for h in horarios %}
         <div style="display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--border)">
           <i class="fas fa-bell" style="color:var(--accent);font-size:13px;flex-shrink:0"></i>
-          <span style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">{{ h.hora.strftime('%H:%M') }}</span>
+          <span style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;min-width:52px">{{ h.hora.strftime('%H:%M') }}</span>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;flex:1">
+            {% set dias_activos = h.dias_semana or [1,2,3,4,5] %}
+            {% for num, lbl in [(1,'L'),(2,'M'),(3,'X'),(4,'J'),(5,'V'),(6,'S'),(7,'D')] %}
+            <span style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;
+              {% if num in dias_activos %}background:var(--accent);color:#fff;{% else %}background:var(--surface2);color:var(--text-muted);{% endif %}">
+              {{ lbl }}
+            </span>
+            {% endfor %}
+            <span style="font-size:11px;color:var(--text-muted);margin-left:4px;align-self:center">{{ h.duracion_seg or 3 }}s</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn-icon" onclick="abrirEditar({{ h.id }}, '{{ h.hora.strftime('%H:%M') }}', {{ h.dias_semana or [1,2,3,4,5] }}, {{ h.duracion_seg or 3 }})">
+              <i class="fas fa-edit"></i>
+            </button>
+            <form method="POST" action="{{ url_for('dispositivo_delete_horario', device_id=d.id, hid=h.id) }}" style="display:inline" onsubmit="return confirm('¿Eliminar este horario?')">
+              <button type="submit" class="btn-icon danger"><i class="fas fa-trash"></i></button>
+            </form>
+          </div>
         </div>
         {% endfor %}
       </div>
@@ -157,6 +182,43 @@
         Sin horarios configurados todavía.
       </div>
       {% endif %}
+    </div>
+
+    <!-- Modal editar horario -->
+    <div class="modal-backdrop" id="modalEditarHorario" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+      <div class="modal" style="max-width:400px;width:90%">
+        <div class="modal-header">
+          <span class="modal-title">Editar horario</span>
+          <button class="modal-close" onclick="cerrarEditarHorario()"><i class="fas fa-times"></i></button>
+        </div>
+        <form method="POST" id="formEditarHorario">
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+            <div>
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Hora</label>
+              <input type="time" name="hora" id="editHora" required style="font-size:16px;font-weight:600;width:120px"/>
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">Días</label>
+              <div style="display:flex;gap:8px">
+                {% for num, lbl in [(1,'L'),(2,'M'),(3,'X'),(4,'J'),(5,'V'),(6,'S'),(7,'D')] %}
+                <label style="display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+                  <input type="checkbox" name="dias" value="{{ num }}" id="editDia{{ num }}" style="accent-color:var(--accent)"/>
+                  {{ lbl }}
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Duración (segundos)</label>
+              <input type="number" name="duracion_seg" id="editDuracion" min="1" max="60" style="width:80px;font-size:14px"/>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarEditarHorario()">Cancelar</button>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
+          </div>
+        </form>
+      </div>
     </div>
     {% endif %}
 
@@ -193,5 +255,24 @@
   if (inputHora) {
     inputHora.addEventListener('keydown', e => { if (e.key === 'Escape') cancelarAgregar(); });
   }
+
+  function abrirEditar(id, hora, dias, duracion) {
+    document.getElementById('editHora').value = hora;
+    document.getElementById('editDuracion').value = duracion;
+    [1,2,3,4,5,6,7].forEach(n => {
+      const cb = document.getElementById('editDia' + n);
+      if (cb) cb.checked = dias.includes(n);
+    });
+    document.getElementById('formEditarHorario').action =
+      '/dispositivo/{{ d.id }}/horario/' + id + '/edit';
+    const modal = document.getElementById('modalEditarHorario');
+    modal.style.display = 'flex';
+  }
+  function cerrarEditarHorario() {
+    document.getElementById('modalEditarHorario').style.display = 'none';
+  }
+  document.getElementById('modalEditarHorario')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget) cerrarEditarHorario();
+  });
 </script>
 {% endblock %}
