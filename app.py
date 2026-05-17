@@ -61,7 +61,7 @@ def send_verification_email(to_email, username, token):
     # ── Resend API (preferido en Railway) ─────────────────────────────────────
     if RESEND_API_KEY:
         try:
-            from_addr = SMTP_FROM or f"Dation <onboarding@resend.dev>"
+            from_addr = f"Dation <{SMTP_FROM}>" if SMTP_FROM and "<" not in SMTP_FROM else (SMTP_FROM or "Dation <noreply@dation.com.ar>")
             payload = json.dumps({
                 "from": from_addr,
                 "to": [to_email],
@@ -1064,38 +1064,64 @@ def admin_index():
 @app.get("/admin/test-email")
 @admin_required
 def admin_test_email():
-    import ssl
     results = []
     results.append(f"RESEND_API_KEY: {'configurado' if RESEND_API_KEY else 'NO configurado'}")
     results.append(f"SMTP_HOST: '{SMTP_HOST}'")
-    results.append(f"SMTP_PORT: {SMTP_PORT}")
-    results.append(f"SMTP_USER: '{SMTP_USER}'")
     results.append(f"SMTP_FROM: '{SMTP_FROM}'")
     results.append(f"APP_URL:   '{APP_URL}'")
     results.append("---")
-    if not SMTP_HOST or not SMTP_USER:
-        results.append("ERROR: Variables SMTP no configuradas en Railway.")
-        return "<pre>" + "\n".join(results) + "</pre>", 200
-    try:
-        if SMTP_PORT == 465:
-            ctx = ssl.create_default_context()
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10, context=ctx) as srv:
-                results.append("Conexion SSL OK")
-                srv.login(SMTP_USER, SMTP_PASS)
-                results.append("Login OK")
-                srv.sendmail(SMTP_FROM, SMTP_USER, f"Subject: Test Dation\n\nTest de conexion SMTP OK")
-                results.append(f"Email enviado a {SMTP_USER} OK")
+
+    to_email = current_user.email or SMTP_USER
+    if not to_email:
+        results.append("ERROR: no hay email destino (configurá email en tu usuario o SMTP_USER)")
+        return "<pre style='font-family:monospace;padding:20px'>" + "\n".join(results) + "</pre>", 200
+
+    if RESEND_API_KEY:
+        results.append(f"Probando Resend API → {to_email}")
+        try:
+            from_addr = SMTP_FROM or "Dation <noreply@dation.com.ar>"
+            payload = json.dumps({
+                "from": from_addr,
+                "to": [to_email],
+                "subject": "Test email – Dation",
+                "text": "Este es un email de prueba enviado desde Dation vía Resend.",
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=payload,
+                headers={
+                    "Authorization": f"Bearer {RESEND_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = resp.read().decode()
+                results.append(f"Resend OK (status {resp.status}): {body}")
+        except Exception as e:
+            results.append(f"Resend ERROR: {type(e).__name__}: {e}")
+    else:
+        import ssl
+        results.append("RESEND_API_KEY no configurado, probando SMTP...")
+        if not SMTP_HOST or not SMTP_USER:
+            results.append("ERROR: Variables SMTP no configuradas.")
         else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as srv:
-                srv.ehlo()
-                srv.starttls()
-                results.append("STARTTLS OK")
-                srv.login(SMTP_USER, SMTP_PASS)
-                results.append("Login OK")
-                srv.sendmail(SMTP_FROM, SMTP_USER, f"Subject: Test Dation\n\nTest de conexion SMTP OK")
-                results.append(f"Email enviado a {SMTP_USER} OK")
-    except Exception as e:
-        results.append(f"ERROR: {type(e).__name__}: {e}")
+            try:
+                if SMTP_PORT == 465:
+                    ctx = ssl.create_default_context()
+                    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10, context=ctx) as srv:
+                        srv.login(SMTP_USER, SMTP_PASS)
+                        srv.sendmail(SMTP_FROM, to_email, f"Subject: Test Dation\n\nTest SMTP OK")
+                        results.append(f"SMTP OK → {to_email}")
+                else:
+                    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as srv:
+                        srv.ehlo(); srv.starttls()
+                        srv.login(SMTP_USER, SMTP_PASS)
+                        srv.sendmail(SMTP_FROM, to_email, f"Subject: Test Dation\n\nTest SMTP OK")
+                        results.append(f"SMTP OK → {to_email}")
+            except Exception as e:
+                results.append(f"SMTP ERROR: {type(e).__name__}: {e}")
+
     return "<pre style='font-family:monospace;padding:20px'>" + "\n".join(results) + "</pre>", 200
 
 # ── Admin: Usuarios ────────────────────────────────────────────────────────────
