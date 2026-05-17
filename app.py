@@ -64,11 +64,11 @@ def send_verification_email(to_email, username, token):
     msg.attach(MIMEText(html, "html"))
     try:
         if SMTP_PORT == 465:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as srv:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) as srv:
                 srv.login(SMTP_USER, SMTP_PASS)
                 srv.sendmail(SMTP_FROM, to_email, msg.as_string())
         else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as srv:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as srv:
                 srv.ehlo()
                 srv.starttls()
                 srv.login(SMTP_USER, SMTP_PASS)
@@ -521,6 +521,25 @@ def verificar_email(token):
     """, (u["id"],))
     flash("¡Email verificado! Ya podés ingresar.", "success")
     return redirect(url_for("login_view"))
+
+
+@app.route("/reenviar-verificacion", methods=["GET", "POST"])
+def reenviar_verificacion():
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        u = db_one("SELECT * FROM usuarios WHERE email = %s AND email_verificado = FALSE", (email,))
+        if u:
+            token  = secrets.token_urlsafe(48)
+            expiry = datetime.utcnow() + timedelta(hours=24)
+            db_run("UPDATE usuarios SET verification_token=%s, token_expiry=%s WHERE id=%s",
+                   (token, expiry, u["id"]))
+            send_verification_email(email, u["username"], token)
+        # Siempre mismo mensaje para no revelar si el email existe
+        flash("Si el email está registrado y pendiente de verificación, te llegará un nuevo enlace.", "success")
+        return redirect(url_for("login_view"))
+    return render_template("reenviar_verificacion.html")
 
 
 @app.get("/logout")
@@ -1080,6 +1099,11 @@ def admin_usuarios():
                     uid,
                 ))
             flash("Usuario actualizado.", "success")
+
+        elif action == "verificar":
+            uid = request.form.get("id")
+            db_run("UPDATE usuarios SET email_verificado=TRUE, verification_token=NULL, token_expiry=NULL WHERE id=%s", (uid,))
+            flash("Usuario verificado manualmente.", "success")
 
         elif action == "eliminar":
             uid = request.form.get("id")

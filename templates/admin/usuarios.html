@@ -50,12 +50,28 @@
           <td class="td-muted">{{ u.email or '–' }}</td>
           <td class="td-muted">{{ u.empresa_nombre or '–' }}</td>
           <td>
-            <span class="badge {{ 'badge-admin' if u.is_admin else 'badge-user' }}">
-              {{ 'Admin' if u.is_admin else 'Usuario' }}
-            </span>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              <span class="badge {{ 'badge-admin' if u.is_admin else 'badge-user' }}">
+                {{ 'Admin' if u.is_admin else 'Usuario' }}
+              </span>
+              {% if not u.get('email_verificado', True) %}
+              <span class="badge" style="background:#431407;color:#fb923c;border:1px solid #9a3412">
+                <i class="fas fa-clock" style="font-size:9px"></i> Sin verificar
+              </span>
+              {% endif %}
+            </div>
           </td>
           <td>
             <div style="display:flex;gap:6px">
+              {% if not u.get('email_verificado', True) %}
+              <form method="POST" style="display:inline">
+                <input type="hidden" name="action" value="verificar"/>
+                <input type="hidden" name="id" value="{{ u.id }}"/>
+                <button type="submit" class="btn-icon" title="Verificar manualmente" style="color:#4ade80">
+                  <i class="fas fa-check-circle"></i>
+                </button>
+              </form>
+              {% endif %}
               {% if not u.is_admin %}
               <button class="btn-icon" title="Dispositivos" onclick='abrirPermisos({{ u|tojson }})'>
                 <i class="fas fa-th-large"></i>
