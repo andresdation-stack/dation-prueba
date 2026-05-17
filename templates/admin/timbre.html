@@ -58,23 +58,41 @@
   <!-- Horarios -->
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Horarios</div>
-      <button type="button" class="btn btn-secondary" style="font-size:12px" onclick="agregarHorario()">
+      <div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Horarios</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px" id="contadorHorarios">
+          {{ horarios|length }} horario{% if horarios|length != 1 %}s{% endif %} configurado{% if horarios|length != 1 %}s{% endif %}
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary" style="font-size:12px" onclick="abrirAgregarHorario()">
         <i class="fas fa-plus"></i> Agregar
       </button>
     </div>
-    <div id="listaHorarios" style="display:flex;flex-wrap:wrap;gap:8px">
+
+    <!-- Fila para agregar nuevo horario (oculta por defecto) -->
+    <div id="rowNuevoHorario" style="display:none;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;margin-bottom:10px">
+      <i class="fas fa-clock" style="color:var(--accent);font-size:13px"></i>
+      <input type="time" id="inputNuevoHorario" style="font-size:15px;font-weight:600;width:110px"/>
+      <button type="button" class="btn btn-primary" style="font-size:12px;padding:4px 12px" onclick="confirmarHorario()">Agregar</button>
+      <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="cancelarHorario()">Cancelar</button>
+    </div>
+
+    <!-- Lista de horarios guardados -->
+    <div id="listaHorarios">
       {% for h in horarios %}
-      <div class="horario-item">
-        <input type="time" name="horarios" value="{{ h.hora.strftime('%H:%M') }}"
-               style="background:transparent;border:none;color:var(--text);font-size:15px;font-weight:600;width:90px"/>
-        <button type="button" class="btn-icon danger" onclick="this.closest('.horario-item').remove()">
-          <i class="fas fa-times"></i>
+      <div class="horario-row">
+        <input type="hidden" name="horarios" value="{{ h.hora.strftime('%H:%M') }}"/>
+        <i class="fas fa-bell" style="color:var(--accent);font-size:13px;flex-shrink:0"></i>
+        <span style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">{{ h.hora.strftime('%H:%M') }}</span>
+        <button type="button" class="btn-icon danger" style="margin-left:auto" onclick="eliminarHorario(this)">
+          <i class="fas fa-trash"></i>
         </button>
       </div>
       {% endfor %}
     </div>
+
     <div id="emptyHorarios" style="{% if horarios %}display:none;{% endif %}text-align:center;padding:24px;color:var(--text-muted);font-size:13px">
+      <i class="fas fa-bell-slash" style="font-size:24px;opacity:.3;display:block;margin-bottom:8px"></i>
       Sin horarios. Usá "Agregar" para configurar cuándo suena el timbre.
     </div>
   </div>
@@ -157,13 +175,12 @@
     border-color: var(--accent);
     color: #fff;
   }
-  .horario-item {
-    display: flex; align-items: center; gap: 6px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 10px;
+  .horario-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--border);
   }
+  .horario-row:last-child { border-bottom: none; }
   .lista-row {
     display: flex; align-items: center; gap: 8px;
     padding: 8px 0;
@@ -183,18 +200,70 @@
     });
   });
 
-  function agregarHorario() {
-    document.getElementById('emptyHorarios').style.display = 'none';
-    const div = document.createElement('div');
-    div.className = 'horario-item';
-    div.innerHTML = `
-      <input type="time" name="horarios"
-             style="background:transparent;border:none;color:var(--text);font-size:15px;font-weight:600;width:90px"/>
-      <button type="button" class="btn-icon danger" onclick="this.closest('.horario-item').remove()">
-        <i class="fas fa-times"></i>
-      </button>`;
-    document.getElementById('listaHorarios').appendChild(div);
+  function abrirAgregarHorario() {
+    const row = document.getElementById('rowNuevoHorario');
+    row.style.display = 'flex';
+    document.getElementById('inputNuevoHorario').focus();
   }
+
+  function cancelarHorario() {
+    document.getElementById('rowNuevoHorario').style.display = 'none';
+    document.getElementById('inputNuevoHorario').value = '';
+  }
+
+  function confirmarHorario() {
+    const input = document.getElementById('inputNuevoHorario');
+    const val = input.value;
+    if (!val) return;
+
+    // Verificar duplicado
+    const existentes = [...document.querySelectorAll('#listaHorarios input[name="horarios"]')].map(i => i.value);
+    if (existentes.includes(val)) {
+      alert('Ese horario ya está en la lista.');
+      return;
+    }
+
+    document.getElementById('emptyHorarios').style.display = 'none';
+    const lista = document.getElementById('listaHorarios');
+    const div = document.createElement('div');
+    div.className = 'horario-row';
+    div.innerHTML = `
+      <input type="hidden" name="horarios" value="${val}"/>
+      <i class="fas fa-bell" style="color:var(--accent);font-size:13px;flex-shrink:0"></i>
+      <span style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">${val}</span>
+      <button type="button" class="btn-icon danger" style="margin-left:auto" onclick="eliminarHorario(this)">
+        <i class="fas fa-trash"></i>
+      </button>`;
+
+    // Insertar ordenado
+    const filas = [...lista.querySelectorAll('.horario-row')];
+    const siguiente = filas.find(f => f.querySelector('input').value > val);
+    siguiente ? lista.insertBefore(div, siguiente) : lista.appendChild(div);
+
+    actualizarContador();
+    cancelarHorario();
+  }
+
+  function eliminarHorario(btn) {
+    btn.closest('.horario-row').remove();
+    const lista = document.getElementById('listaHorarios');
+    if (!lista.querySelector('.horario-row')) {
+      document.getElementById('emptyHorarios').style.display = '';
+    }
+    actualizarContador();
+  }
+
+  function actualizarContador() {
+    const n = document.querySelectorAll('#listaHorarios .horario-row').length;
+    document.getElementById('contadorHorarios').textContent =
+      `${n} horario${n !== 1 ? 's' : ''} configurado${n !== 1 ? 's' : ''}`;
+  }
+
+  // Confirmar con Enter en el input de hora
+  document.getElementById('inputNuevoHorario').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); confirmarHorario(); }
+    if (e.key === 'Escape') cancelarHorario();
+  });
 
   function agregarExcepcion() {
     document.getElementById('emptyExcepciones').style.display = 'none';
