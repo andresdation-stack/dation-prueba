@@ -543,12 +543,15 @@ def admin_usuarios():
 
         elif action == "permisos":
             uid = request.form.get("usuario_id")
-            dids = request.form.getlist("dispositivos")
-            db_run("DELETE FROM usuario_dispositivos WHERE usuario_id=%s", (uid,))
-            for did in dids:
-                db_run("INSERT INTO usuario_dispositivos (usuario_id, dispositivo_id) VALUES (%s,%s)",
-                       (uid, did))
-            flash("Permisos actualizados.", "success")
+            if not uid:
+                flash("Error: usuario no identificado.", "error")
+            else:
+                dids = request.form.getlist("dispositivos")
+                db_run("DELETE FROM usuario_dispositivos WHERE usuario_id=%s", (uid,))
+                for did in dids:
+                    db_run("INSERT INTO usuario_dispositivos (usuario_id, dispositivo_id) VALUES (%s,%s)",
+                           (uid, did))
+                flash("Permisos actualizados.", "success")
 
         return redirect(url_for("admin_usuarios"))
 
@@ -805,12 +808,15 @@ def admin_dispositivos():
 
         elif action == "permisos":
             uid = request.form.get("usuario_id")
-            dids = request.form.getlist("dispositivos")
-            db_run("DELETE FROM usuario_dispositivos WHERE usuario_id=%s", (uid,))
-            for did in dids:
-                db_run("INSERT INTO usuario_dispositivos (usuario_id, dispositivo_id) VALUES (%s,%s)",
-                       (uid, did))
-            flash("Permisos actualizados.", "success")
+            if not uid:
+                flash("Seleccioná un usuario antes de guardar.", "error")
+            else:
+                dids = request.form.getlist("dispositivos")
+                db_run("DELETE FROM usuario_dispositivos WHERE usuario_id=%s", (uid,))
+                for did in dids:
+                    db_run("INSERT INTO usuario_dispositivos (usuario_id, dispositivo_id) VALUES (%s,%s)",
+                           (uid, did))
+                flash("Permisos actualizados.", "success")
 
         return redirect(url_for("admin_dispositivos"))
 
