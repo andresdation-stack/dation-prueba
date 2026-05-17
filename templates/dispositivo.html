@@ -35,18 +35,14 @@
   <div class="detail-grid" style="margin-top:20px">
 
     <!-- Último heartbeat -->
-    <div class="detail-card">
-      <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center">
+    <div class="detail-card" style="cursor:pointer;user-select:none" onclick="toggleLog(this)">
+      <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center;pointer-events:none">
         <span><i class="fas fa-satellite-dish"></i> Último heartbeat</span>
-        {% if hb_log %}
-        <button onclick="toggleLog()" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;padding:2px 6px;border-radius:4px" title="Ver log">
-          <i class="fas fa-terminal"></i>
-        </button>
-        {% endif %}
+        <i class="fas fa-chevron-down" id="hbChevron" style="font-size:11px;color:var(--text-muted);transition:transform .2s"></i>
       </div>
 
       <!-- Estado compacto -->
-      <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;pointer-events:none">
         {% if hb and minutes_ago is not none and minutes_ago < 30 %}
         <i class="fas fa-circle" style="color:#4ade80;font-size:8px"></i>
         <span style="color:#4ade80;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">
@@ -65,16 +61,18 @@
       </div>
 
       <!-- Terminal log (oculto) -->
-      <div id="hbLog" style="display:none;margin-top:12px;background:#000;border-radius:8px;padding:12px 14px;font-family:'Courier New',Courier,monospace;font-size:11px;color:#22c55e;max-height:280px;overflow-y:auto;border:1px solid #1a3a1a">
-        {% if hb_log %}
-          {% for entry in hb_log %}
-          <div style="padding:3px 0;border-bottom:1px solid #0d1f0d;white-space:pre-wrap;word-break:break-all">
-            <span style="opacity:.55">{{ entry.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>  <span style="opacity:.8">&gt;</span>  {% if entry.data %}{{ entry.data | tojson }}{% else %}<span style="opacity:.4">(sin datos)</span>{% endif %}
-          </div>
-          {% endfor %}
-        {% else %}
-          <span style="opacity:.4">Sin registros</span>
-        {% endif %}
+      <div id="hbLog" style="display:none;margin-top:12px;background:#000;border-radius:8px;padding:12px 14px;font-family:'Courier New',Courier,monospace;font-size:11px;color:#22c55e;max-height:300px;overflow-y:auto;border:1px solid #1a3a1a;cursor:default" onclick="event.stopPropagation()">
+        {% set log_rows = hb_log if hb_log else [] %}
+        {% for entry in log_rows %}
+        <div style="padding:3px 0;border-bottom:1px solid #0d1f0d;white-space:pre-wrap;word-break:break-all">
+          <span style="opacity:.55">{{ entry.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>&nbsp;&nbsp;<span style="opacity:.7">&gt;</span>&nbsp;&nbsp;{% if entry.data %}{{ entry.data | tojson }}{% else %}<span style="opacity:.4">—</span>{% endif %}
+        </div>
+        {% endfor %}
+        {% for _ in range([0, 20 - log_rows|length]|max) %}
+        <div style="padding:3px 0;border-bottom:1px solid #0d1f0d;opacity:.2">
+          ——————&nbsp;&nbsp;&gt;&nbsp;&nbsp;no hay informacion
+        </div>
+        {% endfor %}
       </div>
     </div>
 
@@ -397,11 +395,13 @@
 
 {% block scripts %}
 <script>
-  function toggleLog() {
+  function toggleLog(card) {
     const el = document.getElementById('hbLog');
-    if (el) {
-      el.style.display = el.style.display === 'none' ? 'block' : 'none';
-    }
+    const chevron = document.getElementById('hbChevron');
+    if (!el) return;
+    const open = el.style.display !== 'none';
+    el.style.display = open ? 'none' : 'block';
+    if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
   }
 
   function abrirAgregar() {
