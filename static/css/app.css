@@ -75,7 +75,6 @@ a:hover { color: var(--accent-dark); }
 
 .sidebar-logo img {
   height: 32px;
-  filter: brightness(0) invert(1);
 }
 
 .sidebar-logo span {
@@ -778,7 +777,7 @@ textarea { resize: vertical; min-height: 80px; }
   margin-bottom: 28px;
 }
 
-.login-logo img { height: 40px; filter: brightness(0) invert(1); }
+.login-logo img { height: 40px; }
 .login-logo-text {
   font-size: 26px;
   font-weight: 800;
