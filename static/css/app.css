@@ -756,6 +756,7 @@ textarea { resize: vertical; min-height: 80px; }
 /* ── Login page ───────────────────────────────────────────────────────────── */
 .login-page {
   min-height: 100vh;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
