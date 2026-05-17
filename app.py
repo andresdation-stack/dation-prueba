@@ -672,10 +672,12 @@ def dispositivo_timbre_pausar(device_id):
     if tipo == "horas" and horas > 0:
         hasta = datetime.utcnow() + timedelta(hours=horas)
     db_run("""
-        UPDATE timbre_config SET pausado=TRUE, pausado_hasta=%s,
-        config_version=config_version+1, config_acked=FALSE, updated_at=NOW()
-        WHERE device_id=%s
-    """, (hasta, d["device_id"]))
+        INSERT INTO timbre_config (device_id, pausado, pausado_hasta, config_version, config_acked, updated_at)
+        VALUES (%s, TRUE, %s, 1, FALSE, NOW())
+        ON CONFLICT (device_id) DO UPDATE
+        SET pausado=TRUE, pausado_hasta=EXCLUDED.pausado_hasta,
+            config_version=timbre_config.config_version+1, config_acked=FALSE, updated_at=NOW()
+    """, (d["device_id"], hasta))
     flash("Timbre pausado.", "success")
     return redirect(url_for("dispositivo_detail", device_id=device_id))
 

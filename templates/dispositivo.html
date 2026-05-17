@@ -120,18 +120,16 @@
       <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center">
         <span><i class="fas fa-bell"></i> Horarios del timbre</span>
         <div style="display:flex;gap:8px">
-          {% if timbre_cfg %}
-            {% if timbre_cfg.pausado %}
-            <form method="POST" action="{{ url_for('dispositivo_timbre_reanudar', device_id=d.id) }}" style="display:inline">
-              <button type="submit" class="btn btn-primary" style="font-size:12px;background:#4ade80;border-color:#4ade80;color:#000">
-                <i class="fas fa-play"></i> Reanudar
-              </button>
-            </form>
-            {% else %}
-            <button type="button" class="btn btn-secondary" style="font-size:12px" onclick="abrirPausa()">
-              <i class="fas fa-pause"></i> Pausar
+          {% if timbre_cfg and timbre_cfg.pausado %}
+          <form method="POST" action="{{ url_for('dispositivo_timbre_reanudar', device_id=d.id) }}" style="display:inline">
+            <button type="submit" class="btn btn-primary" style="font-size:12px;background:#4ade80;border-color:#4ade80;color:#000">
+              <i class="fas fa-play"></i> Reanudar
             </button>
-            {% endif %}
+          </form>
+          {% else %}
+          <button type="button" class="btn btn-secondary" style="font-size:12px" onclick="abrirPausa()">
+            <i class="fas fa-pause"></i> Pausar
+          </button>
           {% endif %}
           <button type="button" class="btn btn-primary" style="font-size:12px" onclick="abrirAgregar()">
             <i class="fas fa-plus"></i> Agregar
