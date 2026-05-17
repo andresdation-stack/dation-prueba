@@ -251,6 +251,11 @@ def init_db():
                     last_data JSONB
                 )
             """)
+            # Migraciones de columnas nuevas
+            cur.execute("""
+                ALTER TABLE dispositivos
+                ADD COLUMN IF NOT EXISTS configuracion_id INTEGER REFERENCES configuraciones(id) ON DELETE SET NULL
+            """)
             # Admin por defecto
             cur.execute("SELECT id FROM usuarios WHERE is_admin = TRUE LIMIT 1")
             if not cur.fetchone():
@@ -347,6 +352,9 @@ def dashboard():
             ORDER BY d.nombre
         """, (current_user.id,))
 
+    estados_list = db_get("SELECT id, nombre, color FROM estados") or []
+    estados_map = {e["id"]: dict(e) for e in estados_list}
+
     now = datetime.utcnow()
     dispositivos = []
     for d in (rows or []):
@@ -358,6 +366,18 @@ def dashboard():
             online = (now - ultima_vez).total_seconds() < 300
         d["online"] = online
         d["ultima_vez"] = ultima_vez
+
+        estado_actual = None
+        if d.get("last_data"):
+            try:
+                ld = d["last_data"] if isinstance(d["last_data"], dict) else json.loads(d["last_data"])
+                eid = ld.get("estado_id")
+                if eid is not None:
+                    estado_actual = estados_map.get(int(eid))
+            except Exception:
+                pass
+        d["estado_actual"] = estado_actual
+
         dispositivos.append(d)
 
     return render_template("dashboard.html", dispositivos=dispositivos)
@@ -759,6 +779,7 @@ def _parse_device_form():
         "tiene_sensor4" in f, f.get("sensor4_nombre",""), f.get("sensor4_icon",""), f.get("sensor4_factor") or None,
         "tiene_sensor5" in f, f.get("sensor5_nombre",""), f.get("sensor5_icon",""), f.get("sensor5_factor") or None,
         "tiene_maquina" in f, f.get("maquina_ancho") or None,
+        f.get("configuracion_id") or None,
     )
 
 @app.route("/admin/dispositivos", methods=["GET", "POST"])
@@ -782,8 +803,8 @@ def admin_dispositivos():
                              tiene_sensor3, sensor3_nombre, sensor3_icon, sensor3_factor,
                              tiene_sensor4, sensor4_nombre, sensor4_icon, sensor4_factor,
                              tiene_sensor5, sensor5_nombre, sensor5_icon, sensor5_factor,
-                             tiene_maquina, maquina_ancho)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                             tiene_maquina, maquina_ancho, configuracion_id)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """, params)
                     flash("Dispositivo creado.", "success")
                 except Exception as e:
@@ -801,7 +822,7 @@ def admin_dispositivos():
                     tiene_sensor3=%s, sensor3_nombre=%s, sensor3_icon=%s, sensor3_factor=%s,
                     tiene_sensor4=%s, sensor4_nombre=%s, sensor4_icon=%s, sensor4_factor=%s,
                     tiene_sensor5=%s, sensor5_nombre=%s, sensor5_icon=%s, sensor5_factor=%s,
-                    tiene_maquina=%s, maquina_ancho=%s
+                    tiene_maquina=%s, maquina_ancho=%s, configuracion_id=%s
                 WHERE id=%s
             """, params + (did,))
             flash("Dispositivo actualizado.", "success")
@@ -830,6 +851,7 @@ def admin_dispositivos():
         ORDER BY d.nombre
     """)
     empresas = db_get("SELECT id, nombre FROM empresas ORDER BY nombre")
+    configuraciones = db_get("SELECT id, nombre FROM configuraciones ORDER BY nombre")
     usuarios = db_get("""
         SELECT id, username, nombre, apellido FROM usuarios
         WHERE NOT is_admin ORDER BY username
@@ -839,7 +861,8 @@ def admin_dispositivos():
     for p in (permisos_raw or []):
         permisos.setdefault(p["usuario_id"], []).append(p["dispositivo_id"])
     return render_template("admin/dispositivos.html", dispositivos=dispositivos,
-                           empresas=empresas, usuarios=usuarios, permisos=permisos)
+                           empresas=empresas, configuraciones=configuraciones,
+                           usuarios=usuarios, permisos=permisos)
 
 # ── Admin: Estados ─────────────────────────────────────────────────────────────
 

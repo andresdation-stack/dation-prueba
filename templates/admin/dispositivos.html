@@ -180,9 +180,18 @@
       {% for e in empresas %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
     </select>
   </div>
-  <div class="form-group span-2">
+  <div class="form-group">
     <label>Ícono del dispositivo</label>
     {{ icon_trigger(p, 'icon', 'fa-microchip') }}
+  </div>
+  <div class="form-group">
+    <label>Configuración</label>
+    <select name="configuracion_id" id="{{ p }}_configuracion_id">
+      <option value="">Sin configuración</option>
+      {% for c in configuraciones %}
+      <option value="{{ c.id }}">{{ c.nombre }}</option>
+      {% endfor %}
+    </select>
   </div>
 </div>
 
@@ -383,6 +392,7 @@
     setVal(`${p}_device_id`, d.device_id);
     setVal(`${p}_empresa_id`, d.empresa_id);
     setIconVal(`${p}_icon`, d.icon || 'fa-microchip');
+    setVal(`${p}_configuracion_id`, d.configuracion_id);
     setVal(`${p}_gps`, d.tiene_gps);
     setVal(`${p}_caudal`, d.tiene_caudal);
     setVal(`${p}_caudal_factor`, d.caudal_factor);
