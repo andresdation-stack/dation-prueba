@@ -56,6 +56,11 @@
           </td>
           <td>
             <div style="display:flex;gap:6px">
+              {% if not u.is_admin %}
+              <button class="btn-icon" title="Dispositivos" onclick='abrirPermisos({{ u|tojson }})'>
+                <i class="fas fa-th-large"></i>
+              </button>
+              {% endif %}
               <button class="btn-icon" title="Editar" onclick='editarUsuario({{ u|tojson }})'>
                 <i class="fas fa-edit"></i>
               </button>
@@ -220,6 +225,33 @@
   </div>
 </div>
 
+<!-- Modal Permisos -->
+<div class="modal-backdrop" id="modalPermisos">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <span class="modal-title"><i class="fas fa-th-large" style="margin-right:8px;color:var(--accent)"></i><span id="perm_titulo"></span></span>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:3px">
+          <i class="fas fa-building" style="width:14px"></i> <span id="perm_empresa"></span>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modalPermisos')"><i class="fas fa-times"></i></button>
+    </div>
+    <form method="POST">
+      <input type="hidden" name="action" value="permisos"/>
+      <input type="hidden" name="usuario_id" id="perm_uid"/>
+      <div class="modal-body">
+        <div class="form-section" style="margin-bottom:12px">Dispositivos visibles</div>
+        <div id="perm_devices" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modalPermisos')">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="perm_save"><i class="fas fa-save"></i> Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Modal Eliminar -->
 <div class="modal-backdrop" id="modalEliminar">
   <div class="modal" style="max-width:400px">
@@ -244,6 +276,9 @@
 
 {% block scripts %}
 <script>
+  const todosDispositivos = {{ dispositivos|tojson }};
+  const permisosPorUsuario = {{ permisos|tojson }};
+
   // Búsqueda
   document.getElementById('searchInput').addEventListener('input', function() {
     const q = this.value.toLowerCase();
@@ -264,7 +299,7 @@
     const ez = document.getElementById('e_zona_horaria');
     if (u.zona_horaria) ez.value = u.zona_horaria;
     const ee = document.getElementById('e_empresa_id');
-    if (u.empresa_id) ee.value = u.empresa_id; else ee.value = '';
+    ee.value = u.empresa_id || '';
     openModal('modalEditar');
   }
 
@@ -272,6 +307,59 @@
     document.getElementById('del_id').value = id;
     document.getElementById('del_nombre').textContent = nombre;
     openModal('modalEliminar');
+  }
+
+  function abrirPermisos(u) {
+    document.getElementById('perm_uid').value = u.id;
+    document.getElementById('perm_titulo').textContent =
+      (u.nombre || u.username) + (u.apellido ? ' ' + u.apellido : '');
+    document.getElementById('perm_empresa').textContent = u.empresa_nombre || 'Sin empresa';
+
+    const container = document.getElementById('perm_devices');
+    const saveBtn   = document.getElementById('perm_save');
+
+    if (!u.empresa_id) {
+      container.innerHTML = `
+        <div style="grid-column:1/-1;padding:20px;text-align:center;color:var(--warning)">
+          <i class="fas fa-exclamation-triangle" style="font-size:24px;margin-bottom:10px;display:block"></i>
+          Este usuario no tiene empresa asignada.<br>
+          <span style="font-size:13px;color:var(--text-muted)">Editá el usuario y asignale una empresa primero.</span>
+        </div>`;
+      saveBtn.disabled = true;
+      openModal('modalPermisos');
+      return;
+    }
+
+    const dispEmpresa = todosDispositivos.filter(d => d.empresa_id == u.empresa_id);
+    const actuales    = permisosPorUsuario[u.id] || [];
+
+    if (!dispEmpresa.length) {
+      container.innerHTML = `
+        <div style="grid-column:1/-1;padding:20px;text-align:center;color:var(--text-muted)">
+          <i class="fas fa-th-large" style="font-size:24px;margin-bottom:10px;display:block;opacity:.3"></i>
+          No hay dispositivos registrados para la empresa de este usuario.
+        </div>`;
+      saveBtn.disabled = true;
+      openModal('modalPermisos');
+      return;
+    }
+
+    saveBtn.disabled = false;
+    container.innerHTML = dispEmpresa.map(d => `
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px" class="form-check">
+        <input type="checkbox" id="pd_${d.id}" name="dispositivos" value="${d.id}"
+               ${actuales.includes(d.id) ? 'checked' : ''}/>
+        <label for="pd_${d.id}" style="font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px">
+          <i class="fas ${d.icon}" style="color:var(--accent);width:16px;text-align:center"></i>
+          <span>
+            ${d.nombre}
+            <code style="color:var(--text-muted);font-size:11px;display:block">${d.device_id}</code>
+          </span>
+        </label>
+      </div>
+    `).join('');
+
+    openModal('modalPermisos');
   }
 </script>
 {% endblock %}

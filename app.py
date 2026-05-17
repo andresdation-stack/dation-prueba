@@ -541,6 +541,15 @@ def admin_usuarios():
                 db_run("DELETE FROM usuarios WHERE id=%s", (uid,))
                 flash("Usuario eliminado.", "success")
 
+        elif action == "permisos":
+            uid = request.form.get("usuario_id")
+            dids = request.form.getlist("dispositivos")
+            db_run("DELETE FROM usuario_dispositivos WHERE usuario_id=%s", (uid,))
+            for did in dids:
+                db_run("INSERT INTO usuario_dispositivos (usuario_id, dispositivo_id) VALUES (%s,%s)",
+                       (uid, did))
+            flash("Permisos actualizados.", "success")
+
         return redirect(url_for("admin_usuarios"))
 
     usuarios = db_get("""
@@ -549,7 +558,16 @@ def admin_usuarios():
         ORDER BY u.username
     """)
     empresas = db_get("SELECT id, nombre FROM empresas ORDER BY nombre")
-    return render_template("admin/usuarios.html", usuarios=usuarios, empresas=empresas)
+    dispositivos = db_get("""
+        SELECT id, nombre, device_id, icon, empresa_id
+        FROM dispositivos ORDER BY nombre
+    """)
+    permisos_raw = db_get("SELECT usuario_id, dispositivo_id FROM usuario_dispositivos")
+    permisos = {}
+    for p in (permisos_raw or []):
+        permisos.setdefault(p["usuario_id"], []).append(p["dispositivo_id"])
+    return render_template("admin/usuarios.html", usuarios=usuarios, empresas=empresas,
+                           dispositivos=dispositivos, permisos=permisos)
 
 # ── Admin: Empresas ────────────────────────────────────────────────────────────
 
