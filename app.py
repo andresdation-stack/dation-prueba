@@ -63,11 +63,16 @@ def send_verification_email(to_email, username, token):
     msg.attach(MIMEText(text, "plain"))
     msg.attach(MIMEText(html, "html"))
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as srv:
-            srv.ehlo()
-            srv.starttls()
-            srv.login(SMTP_USER, SMTP_PASS)
-            srv.sendmail(SMTP_FROM, to_email, msg.as_string())
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as srv:
+                srv.login(SMTP_USER, SMTP_PASS)
+                srv.sendmail(SMTP_FROM, to_email, msg.as_string())
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as srv:
+                srv.ehlo()
+                srv.starttls()
+                srv.login(SMTP_USER, SMTP_PASS)
+                srv.sendmail(SMTP_FROM, to_email, msg.as_string())
         return True
     except Exception as e:
         app.logger.error(f"Email send error: {e}")
