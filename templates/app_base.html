@@ -24,9 +24,17 @@
   {% endwith %}
 </div>
 
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
 <div class="app-layout">
+  <!-- Topbar mobile -->
+  <div class="mobile-topbar">
+    <button class="hamburger" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+    <span class="mobile-topbar-title">Dation</span>
+  </div>
+
   <!-- Sidebar -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
       <span>Dation</span>
     </div>
@@ -95,6 +103,15 @@
       if (e.target === backdrop) closeModal(backdrop.id);
     });
   });
+
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').classList.toggle('open');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('open');
+  }
 
   function openModal(id) {
     document.getElementById(id).classList.add('open');
