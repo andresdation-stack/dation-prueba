@@ -11,7 +11,10 @@
 
 <div class="page-body">
   {% if dispositivos %}
-  <div class="cards-grid">
+  <div style="margin-bottom:16px">
+    <input type="text" class="search-input" id="dashSearch" placeholder="Buscar dispositivo..." style="width:260px" oninput="filtrarCards()"/>
+  </div>
+  <div class="cards-grid" id="cardsGrid">
     {% for d in dispositivos %}
     {% set e_color = d.estado_actual.color if d.estado_actual else '#ef4444' %}
     {% set e_nombre = d.estado_actual.nombre if d.estado_actual else 'Sin estado actual' %}
@@ -55,4 +58,15 @@
   </div>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function filtrarCards() {
+    const q = document.getElementById('dashSearch').value.toLowerCase();
+    document.querySelectorAll('#cardsGrid .device-card').forEach(card => {
+      card.style.display = card.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  }
+</script>
 {% endblock %}

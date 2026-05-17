@@ -288,11 +288,11 @@ a:hover { color: var(--accent-dark); }
 }
 
 .card-icon {
-  width: 56px; height: 56px;
+  width: 64px; height: 64px;
   background: var(--surface2);
-  border-radius: 12px;
+  border-radius: 14px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px;
+  font-size: 30px;
   color: var(--accent);
 }
 
