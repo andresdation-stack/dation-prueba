@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -78,6 +78,10 @@
           <div class="user-role">{% if current_user.is_admin %}Administrador{% else %}Usuario{% endif %}</div>
         </div>
       </div>
+      <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Cambiar tema">
+        <i class="fas fa-sun" id="themeIcon"></i>
+        <span id="themeLabel">Modo claro</span>
+      </button>
     </div>
   </aside>
 
@@ -88,7 +92,39 @@
 </div>
 
 <script>
-  // Auto-dismiss flash messages
+  // ── Theme ─────────────────────────────────────────────────────────────────
+  (function() {
+    const saved = localStorage.getItem('dation-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+  })();
+
+  function toggleTheme() {
+    const html = document.documentElement;
+    const current = html.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('dation-theme', next);
+    updateThemeButton(next);
+  }
+
+  function updateThemeButton(theme) {
+    const icon  = document.getElementById('themeIcon');
+    const label = document.getElementById('themeLabel');
+    if (!icon || !label) return;
+    if (theme === 'dark') {
+      icon.className  = 'fas fa-sun';
+      label.textContent = 'Modo claro';
+    } else {
+      icon.className  = 'fas fa-moon';
+      label.textContent = 'Modo oscuro';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    updateThemeButton(document.documentElement.getAttribute('data-theme'));
+  });
+
+  // ── Auto-dismiss flash messages
   setTimeout(() => {
     document.querySelectorAll('.flash').forEach(el => {
       el.style.transition = 'opacity 0.4s';

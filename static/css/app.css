@@ -3,27 +3,39 @@
 
 :root {
   --sidebar-w: 240px;
-  --sidebar-bg: #13151f;
-  --sidebar-border: #1f2235;
-  --sidebar-text: #8892a4;
-  --sidebar-hover: #1e2130;
-  --sidebar-active-bg: #1e2a45;
-  --sidebar-active-text: #4a9eff;
-  --accent: #4a9eff;
-  --accent-dark: #2d7de0;
-  --bg: #0f1117;
-  --surface: #1a1d2e;
-  --surface2: #1f2235;
-  --text: #e2e8f0;
-  --text-muted: #8892a4;
-  --border: #2a2f45;
+  --sidebar-bg: #111111;
+  --sidebar-border: #1e1e1e;
+  --sidebar-text: #8a8a8a;
+  --sidebar-hover: #1a1a1a;
+  --sidebar-active-bg: #2d1800;
+  --sidebar-active-text: #f97316;
+  --accent: #f97316;
+  --accent-dark: #ea6c00;
+  --bg: #0f0f0f;
+  --surface: #1a1a1a;
+  --surface2: #222222;
+  --text: #f0f0f0;
+  --text-muted: #888888;
+  --border: #2a2a2a;
   --success: #22c55e;
   --error: #ef4444;
   --warning: #f59e0b;
   --online: #22c55e;
   --offline: #ef4444;
   --radius: 10px;
-  --shadow: 0 2px 12px rgba(0,0,0,0.4);
+  --shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+
+/* ── Light mode ────────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg: #f4f4f5;
+  --surface: #ffffff;
+  --surface2: #f0f0f0;
+  --text: #18181b;
+  --text-muted: #71717a;
+  --border: #e4e4e7;
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  /* Sidebar stays dark – brand identity */
 }
 
 body {
@@ -155,6 +167,23 @@ a:hover { color: var(--accent-dark); }
 .user-name { font-size: 13px; font-weight: 600; color: var(--text); }
 .user-role { font-size: 11px; color: var(--text-muted); }
 
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: none;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  color: #8a8a8a;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
 /* ── Main content ─────────────────────────────────────────────────────────── */
 .main-content {
   margin-left: var(--sidebar-w);
@@ -214,7 +243,11 @@ a:hover { color: var(--accent-dark); }
 
 .flash.success { background: #14532d; color: #86efac; border: 1px solid #166534; }
 .flash.error   { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
-.flash.info    { background: #1e3a5f; color: #93c5fd; border: 1px solid #1e40af; }
+.flash.info    { background: #2d1800; color: #fed7aa; border: 1px solid #7c2d12; }
+
+[data-theme="light"] .flash.success { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+[data-theme="light"] .flash.error   { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+[data-theme="light"] .flash.info    { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
 
 @keyframes slideIn {
   from { transform: translateX(20px); opacity: 0; }
@@ -244,7 +277,7 @@ a:hover { color: var(--accent-dark); }
 .device-card:hover {
   border-color: var(--accent);
   transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(74,158,255,0.15);
+  box-shadow: 0 4px 20px rgba(249,115,22,0.15);
   color: inherit;
 }
 
@@ -432,10 +465,14 @@ tbody td {
   font-weight: 600;
 }
 
-.badge-admin   { background: #1e3a5f; color: #93c5fd; }
+.badge-admin   { background: #2d1800; color: #fb923c; }
 .badge-user    { background: var(--surface2); color: var(--text-muted); }
 .badge-online  { background: #14532d; color: #86efac; }
 .badge-offline { background: #450a0a; color: #fca5a5; }
+
+[data-theme="light"] .badge-admin   { background: #fff7ed; color: #c2410c; }
+[data-theme="light"] .badge-online  { background: #dcfce7; color: #166534; }
+[data-theme="light"] .badge-offline { background: #fee2e2; color: #991b1b; }
 
 /* ── Modals ───────────────────────────────────────────────────────────────── */
 .modal-backdrop {
@@ -786,6 +823,8 @@ textarea { resize: vertical; min-height: 80px; }
   font-size: 13px;
   margin-bottom: 16px;
 }
+
+[data-theme="light"] .login-error { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
 
 /* ── Color swatch ─────────────────────────────────────────────────────────── */
 .color-preview {
