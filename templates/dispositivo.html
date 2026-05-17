@@ -121,6 +121,9 @@
         <a href="{{ url_for('admin_nodos') }}" class="btn btn-secondary">
           <i class="fas fa-microchip"></i> Gestionar nodo
         </a>
+        <a href="{{ url_for('admin_timbre', device_id=d.device_id) }}" class="btn btn-secondary">
+          <i class="fas fa-bell"></i> Configurar timbre
+        </a>
       </div>
     </div>
     {% endif %}

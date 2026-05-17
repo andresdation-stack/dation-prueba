@@ -1,0 +1,227 @@
+{% extends "app_base.html" %}
+{% block title %}Timbre – {{ dispositivo.nombre }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="{{ url_for('dispositivo_detail', device_id=dispositivo.device_id) }}" style="font-size:13px;color:var(--text-muted)">
+      <i class="fas fa-arrow-left"></i> {{ dispositivo.nombre }}
+    </a>
+    <div class="page-title" style="margin-top:6px">Timbre</div>
+    <div class="page-subtitle">Configuración del timbre escolar</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px">
+    {% if cfg %}
+      {% if cfg.config_acked %}
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#4ade80">
+          <i class="fas fa-check-circle"></i> Aplicado por el ESP32
+        </div>
+      {% else %}
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#fb923c">
+          <i class="fas fa-clock"></i> Pendiente de confirmación
+        </div>
+      {% endif %}
+    {% endif %}
+    <button type="submit" form="formTimbre" class="btn btn-primary">
+      <i class="fas fa-save"></i> Guardar
+    </button>
+  </div>
+</div>
+
+<div class="page-body">
+<form method="POST" id="formTimbre">
+
+  <!-- General -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:14px">General</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <label style="font-size:13px;white-space:nowrap">Duración del timbre</label>
+      <input type="number" name="duracion_seg" min="1" max="60" value="{{ cfg.duracion_seg if cfg else 3 }}" style="width:70px"/>
+      <span style="font-size:13px;color:var(--text-muted)">segundos</span>
+    </div>
+    <div>
+      <label style="font-size:13px;display:block;margin-bottom:10px">Días activos</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        {% set dias_activos = cfg.dias_semana if cfg else [1,2,3,4,5] %}
+        {% for num, label in [(1,'L'),(2,'M'),(3,'X'),(4,'J'),(5,'V'),(6,'S'),(7,'D')] %}
+        <label style="cursor:pointer">
+          <input type="checkbox" name="dias_semana" value="{{ num }}"
+                 {% if num in dias_activos %}checked{% endif %}
+                 class="dia-cb" style="display:none"/>
+          <div class="dia-btn {% if num in dias_activos %}active{% endif %}">{{ label }}</div>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Horarios -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Horarios</div>
+      <button type="button" class="btn btn-secondary" style="font-size:12px" onclick="agregarHorario()">
+        <i class="fas fa-plus"></i> Agregar
+      </button>
+    </div>
+    <div id="listaHorarios" style="display:flex;flex-wrap:wrap;gap:8px">
+      {% for h in horarios %}
+      <div class="horario-item">
+        <input type="time" name="horarios" value="{{ h.hora.strftime('%H:%M') }}"
+               style="background:transparent;border:none;color:var(--text);font-size:15px;font-weight:600;width:90px"/>
+        <button type="button" class="btn-icon danger" onclick="this.closest('.horario-item').remove()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+    <div id="emptyHorarios" style="{% if horarios %}display:none;{% endif %}text-align:center;padding:24px;color:var(--text-muted);font-size:13px">
+      Sin horarios. Usá "Agregar" para configurar cuándo suena el timbre.
+    </div>
+  </div>
+
+  <!-- Excepciones -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Excepciones</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Fechas puntuales en las que el timbre NO suena (feriados, paros)</div>
+      </div>
+      <button type="button" class="btn btn-secondary" style="font-size:12px" onclick="agregarExcepcion()">
+        <i class="fas fa-plus"></i> Agregar
+      </button>
+    </div>
+    <div id="listaExcepciones">
+      {% for e in excepciones %}
+      <div class="lista-row">
+        <input type="date" name="exc_fecha" value="{{ e.fecha }}"/>
+        <input type="text" name="exc_desc" value="{{ e.descripcion or '' }}" placeholder="Descripción (ej: Feriado, Paro)"/>
+        <button type="button" class="btn-icon danger" onclick="this.closest('.lista-row').remove()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+    <div id="emptyExcepciones" style="{% if excepciones %}display:none;{% endif %}text-align:center;padding:24px;color:var(--text-muted);font-size:13px">
+      Sin excepciones configuradas.
+    </div>
+  </div>
+
+  <!-- Vacaciones -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Vacaciones</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Períodos completos en los que el timbre NO suena</div>
+      </div>
+      <button type="button" class="btn btn-secondary" style="font-size:12px" onclick="agregarVacaciones()">
+        <i class="fas fa-plus"></i> Agregar
+      </button>
+    </div>
+    <div id="listaVacaciones">
+      {% for v in vacaciones %}
+      <div class="lista-row">
+        <input type="date" name="vac_inicio" value="{{ v.fecha_inicio }}"/>
+        <span style="font-size:13px;color:var(--text-muted);white-space:nowrap">hasta</span>
+        <input type="date" name="vac_fin" value="{{ v.fecha_fin }}"/>
+        <input type="text" name="vac_desc" value="{{ v.descripcion or '' }}" placeholder="Descripción (ej: Vacaciones de invierno)"/>
+        <button type="button" class="btn-icon danger" onclick="this.closest('.lista-row').remove()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+    <div id="emptyVacaciones" style="{% if vacaciones %}display:none;{% endif %}text-align:center;padding:24px;color:var(--text-muted);font-size:13px">
+      Sin períodos de vacaciones configurados.
+    </div>
+  </div>
+
+</form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  .dia-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    color: var(--text-muted);
+    transition: all .15s;
+    user-select: none;
+  }
+  .dia-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .horario-item {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+  }
+  .lista-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .lista-row:last-child { border-bottom: none; }
+  .lista-row input[type="date"] { width: 150px; flex-shrink: 0; }
+  .lista-row input[type="text"] { flex: 1; min-width: 0; }
+</style>
+<script>
+  // Días: click en el botón visual togglea el checkbox oculto
+  document.querySelectorAll('.dia-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const cb = this.closest('label').querySelector('.dia-cb');
+      cb.checked = !cb.checked;
+      this.classList.toggle('active', cb.checked);
+    });
+  });
+
+  function agregarHorario() {
+    document.getElementById('emptyHorarios').style.display = 'none';
+    const div = document.createElement('div');
+    div.className = 'horario-item';
+    div.innerHTML = `
+      <input type="time" name="horarios"
+             style="background:transparent;border:none;color:var(--text);font-size:15px;font-weight:600;width:90px"/>
+      <button type="button" class="btn-icon danger" onclick="this.closest('.horario-item').remove()">
+        <i class="fas fa-times"></i>
+      </button>`;
+    document.getElementById('listaHorarios').appendChild(div);
+  }
+
+  function agregarExcepcion() {
+    document.getElementById('emptyExcepciones').style.display = 'none';
+    const div = document.createElement('div');
+    div.className = 'lista-row';
+    div.innerHTML = `
+      <input type="date" name="exc_fecha"/>
+      <input type="text" name="exc_desc" placeholder="Descripción (ej: Feriado, Paro)"/>
+      <button type="button" class="btn-icon danger" onclick="this.closest('.lista-row').remove()">
+        <i class="fas fa-times"></i>
+      </button>`;
+    document.getElementById('listaExcepciones').appendChild(div);
+  }
+
+  function agregarVacaciones() {
+    document.getElementById('emptyVacaciones').style.display = 'none';
+    const div = document.createElement('div');
+    div.className = 'lista-row';
+    div.innerHTML = `
+      <input type="date" name="vac_inicio"/>
+      <span style="font-size:13px;color:var(--text-muted);white-space:nowrap">hasta</span>
+      <input type="date" name="vac_fin"/>
+      <input type="text" name="vac_desc" placeholder="Descripción (ej: Vacaciones de invierno)"/>
+      <button type="button" class="btn-icon danger" onclick="this.closest('.lista-row').remove()">
+        <i class="fas fa-times"></i>
+      </button>`;
+    document.getElementById('listaVacaciones').appendChild(div);
+  }
+</script>
+{% endblock %}

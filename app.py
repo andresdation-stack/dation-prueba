@@ -251,6 +251,42 @@ def init_db():
                     last_data JSONB
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS timbre_config (
+                    device_id VARCHAR(80) PRIMARY KEY REFERENCES dispositivos(device_id) ON DELETE CASCADE,
+                    duracion_seg INTEGER NOT NULL DEFAULT 3,
+                    dias_semana INTEGER[] NOT NULL DEFAULT '{1,2,3,4,5}',
+                    config_version INTEGER NOT NULL DEFAULT 1,
+                    config_acked BOOLEAN DEFAULT FALSE,
+                    config_acked_at TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS timbre_horarios (
+                    id SERIAL PRIMARY KEY,
+                    device_id VARCHAR(80) NOT NULL REFERENCES dispositivos(device_id) ON DELETE CASCADE,
+                    hora TIME NOT NULL,
+                    activo BOOLEAN DEFAULT TRUE
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS timbre_excepciones (
+                    id SERIAL PRIMARY KEY,
+                    device_id VARCHAR(80) NOT NULL REFERENCES dispositivos(device_id) ON DELETE CASCADE,
+                    fecha DATE NOT NULL,
+                    descripcion VARCHAR(200)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS timbre_vacaciones (
+                    id SERIAL PRIMARY KEY,
+                    device_id VARCHAR(80) NOT NULL REFERENCES dispositivos(device_id) ON DELETE CASCADE,
+                    fecha_inicio DATE NOT NULL,
+                    fecha_fin DATE NOT NULL,
+                    descripcion VARCHAR(200)
+                )
+            """)
             # Migraciones de columnas nuevas
             cur.execute("""
                 ALTER TABLE dispositivos
@@ -443,7 +479,9 @@ def ingest():
         ON CONFLICT (device_id) DO UPDATE
         SET last_seen = NOW(), last_data = EXCLUDED.last_data
     """, (device_id, json.dumps(payload)))
-    return jsonify({"ok": True}), 200
+    cfg_status = db_one("SELECT config_acked FROM timbre_config WHERE device_id = %s", (device_id,))
+    config_changed = bool(cfg_status and not cfg_status["config_acked"])
+    return jsonify({"ok": True, "config_changed": config_changed}), 200
 
 @app.get("/api/device/<device_id>/config")
 def device_config_get(device_id):
@@ -471,7 +509,33 @@ def device_config_get(device_id):
         "maquina": d["tiene_maquina"],
         "maquina_ancho": float(d["maquina_ancho"]) if d["maquina_ancho"] else None,
     }
+    tc = db_one("SELECT * FROM timbre_config WHERE device_id = %s", (device_id,))
+    if tc:
+        horarios = db_get("SELECT hora FROM timbre_horarios WHERE device_id = %s AND activo = TRUE ORDER BY hora", (device_id,))
+        excepciones = db_get("SELECT fecha FROM timbre_excepciones WHERE device_id = %s ORDER BY fecha", (device_id,))
+        vacaciones = db_get("SELECT fecha_inicio, fecha_fin FROM timbre_vacaciones WHERE device_id = %s ORDER BY fecha_inicio", (device_id,))
+        config["timbre"] = {
+            "version": tc["config_version"],
+            "duracion_seg": tc["duracion_seg"],
+            "dias_semana": tc["dias_semana"],
+            "horarios": [h["hora"].strftime("%H:%M") for h in horarios],
+            "excepciones": [str(e["fecha"]) for e in excepciones],
+            "vacaciones": [{"inicio": str(v["fecha_inicio"]), "fin": str(v["fecha_fin"])} for v in vacaciones],
+        }
     return jsonify(config), 200
+
+
+@app.post("/api/device/<device_id>/config-ack")
+def device_config_ack(device_id):
+    data = request.get_json(silent=True) or {}
+    key = data.get("api_key") or request.headers.get("X-API-Key", "")
+    if key != API_KEY:
+        return jsonify({"error": "unauthorized"}), 401
+    db_run("""
+        UPDATE timbre_config SET config_acked = TRUE, config_acked_at = NOW()
+        WHERE device_id = %s
+    """, (device_id,))
+    return jsonify({"ok": True}), 200
 
 # ── Admin: redirect ────────────────────────────────────────────────────────────
 
@@ -981,6 +1045,65 @@ def admin_configuracion_edit(cid):
     return render_template("admin/configuracion_edit.html",
                            config=config, config_estados=config_estados,
                            estados_disponibles=estados_disponibles)
+
+# ── Admin: Timbre ──────────────────────────────────────────────────────────────
+
+@app.route("/admin/timbre/<device_id>", methods=["GET", "POST"])
+@admin_required
+def admin_timbre(device_id):
+    dispositivo = db_one("SELECT * FROM dispositivos WHERE device_id = %s", (device_id,))
+    if not dispositivo:
+        abort(404)
+
+    if request.method == "POST":
+        duracion = int(request.form.get("duracion_seg") or 3)
+        dias = [int(d) for d in request.form.getlist("dias_semana")]
+        if not dias:
+            dias = [1, 2, 3, 4, 5]
+
+        db_run("""
+            INSERT INTO timbre_config (device_id, duracion_seg, dias_semana, config_version, config_acked, updated_at)
+            VALUES (%s, %s, %s, 1, FALSE, NOW())
+            ON CONFLICT (device_id) DO UPDATE
+            SET duracion_seg = EXCLUDED.duracion_seg,
+                dias_semana = EXCLUDED.dias_semana,
+                config_version = timbre_config.config_version + 1,
+                config_acked = FALSE,
+                updated_at = NOW()
+        """, (device_id, duracion, dias))
+
+        db_run("DELETE FROM timbre_horarios WHERE device_id = %s", (device_id,))
+        for h in request.form.getlist("horarios"):
+            h = h.strip()
+            if h:
+                db_run("INSERT INTO timbre_horarios (device_id, hora) VALUES (%s, %s)", (device_id, h))
+
+        db_run("DELETE FROM timbre_excepciones WHERE device_id = %s", (device_id,))
+        for fecha, desc in zip(request.form.getlist("exc_fecha"), request.form.getlist("exc_desc")):
+            fecha = fecha.strip()
+            if fecha:
+                db_run("INSERT INTO timbre_excepciones (device_id, fecha, descripcion) VALUES (%s, %s, %s)",
+                       (device_id, fecha, desc.strip() or None))
+
+        db_run("DELETE FROM timbre_vacaciones WHERE device_id = %s", (device_id,))
+        for inicio, fin, desc in zip(request.form.getlist("vac_inicio"),
+                                     request.form.getlist("vac_fin"),
+                                     request.form.getlist("vac_desc")):
+            inicio, fin = inicio.strip(), fin.strip()
+            if inicio and fin:
+                db_run("INSERT INTO timbre_vacaciones (device_id, fecha_inicio, fecha_fin, descripcion) VALUES (%s, %s, %s, %s)",
+                       (device_id, inicio, fin, desc.strip() or None))
+
+        flash("Configuración guardada. El ESP32 la recibirá en el próximo heartbeat.", "success")
+        return redirect(url_for("admin_timbre", device_id=device_id))
+
+    cfg = db_one("SELECT * FROM timbre_config WHERE device_id = %s", (device_id,))
+    horarios = db_get("SELECT * FROM timbre_horarios WHERE device_id = %s ORDER BY hora", (device_id,))
+    excepciones = db_get("SELECT * FROM timbre_excepciones WHERE device_id = %s ORDER BY fecha", (device_id,))
+    vacaciones = db_get("SELECT * FROM timbre_vacaciones WHERE device_id = %s ORDER BY fecha_inicio", (device_id,))
+    return render_template("admin/timbre.html",
+                           dispositivo=dispositivo, cfg=cfg,
+                           horarios=horarios, excepciones=excepciones, vacaciones=vacaciones)
 
 # ── Context processor ──────────────────────────────────────────────────────────
 
