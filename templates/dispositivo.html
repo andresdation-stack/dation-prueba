@@ -34,30 +34,48 @@
 
   <div class="detail-grid" style="margin-top:20px">
 
-    <!-- Último dato -->
+    <!-- Último heartbeat -->
     <div class="detail-card">
-      <div class="detail-card-title"><i class="fas fa-satellite-dish"></i> Último heartbeat</div>
-      {% if hb %}
-        <div class="kv-row">
-          <span class="kv-key">Fecha / hora</span>
-          <span class="kv-value">{{ hb.last_seen.strftime('%d/%m/%Y %H:%M:%S') }}</span>
-        </div>
-        {% if last_data %}
-          {% for k, v in last_data.items() %}
-          <div class="kv-row">
-            <span class="kv-key">{{ k }}</span>
-            <span class="kv-value">{{ v }}</span>
+      <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span><i class="fas fa-satellite-dish"></i> Último heartbeat</span>
+        {% if hb_log %}
+        <button onclick="toggleLog()" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;padding:2px 6px;border-radius:4px" title="Ver log">
+          <i class="fas fa-terminal"></i>
+        </button>
+        {% endif %}
+      </div>
+
+      <!-- Estado compacto -->
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+        {% if hb and minutes_ago is not none and minutes_ago < 30 %}
+        <i class="fas fa-circle" style="color:#4ade80;font-size:8px"></i>
+        <span style="color:#4ade80;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">
+          {{ hb.last_seen.strftime('%d/%m/%Y %H:%M:%S') }}
+        </span>
+        {% elif hb %}
+        <i class="fas fa-circle" style="color:#f87171;font-size:8px"></i>
+        <span style="color:#f87171;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">
+          {{ hb.last_seen.strftime('%d/%m/%Y %H:%M:%S') }}
+        </span>
+        <span style="font-size:11px;color:#f87171">(hace {{ minutes_ago }} min)</span>
+        {% else %}
+        <i class="fas fa-circle" style="color:#f87171;font-size:8px"></i>
+        <span style="color:#f87171;font-size:13px">Nunca recibido</span>
+        {% endif %}
+      </div>
+
+      <!-- Terminal log (oculto) -->
+      <div id="hbLog" style="display:none;margin-top:12px;background:#000;border-radius:8px;padding:12px 14px;font-family:'Courier New',Courier,monospace;font-size:11px;color:#22c55e;max-height:280px;overflow-y:auto;border:1px solid #1a3a1a">
+        {% if hb_log %}
+          {% for entry in hb_log %}
+          <div style="padding:3px 0;border-bottom:1px solid #0d1f0d;white-space:pre-wrap;word-break:break-all">
+            <span style="opacity:.55">{{ entry.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>  <span style="opacity:.8">&gt;</span>  {% if entry.data %}{{ entry.data | tojson }}{% else %}<span style="opacity:.4">(sin datos)</span>{% endif %}
           </div>
           {% endfor %}
         {% else %}
-          <div class="kv-row"><span class="kv-key" style="width:100%">Sin datos adicionales</span></div>
+          <span style="opacity:.4">Sin registros</span>
         {% endif %}
-      {% else %}
-        <div class="empty-state" style="padding:24px">
-          <i class="fas fa-unlink" style="font-size:24px"></i>
-          <p style="margin-top:8px;font-size:13px">Nunca transmitió</p>
-        </div>
-      {% endif %}
+      </div>
     </div>
 
     <!-- Capacidades: solo si el tipo tiene alguna -->
@@ -379,6 +397,13 @@
 
 {% block scripts %}
 <script>
+  function toggleLog() {
+    const el = document.getElementById('hbLog');
+    if (el) {
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+  }
+
   function abrirAgregar() {
     document.getElementById('rowAgregar').style.display = 'flex';
     document.getElementById('inputHora').focus();

@@ -246,6 +246,14 @@ def init_db():
                 )
             """)
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS device_heartbeat_log (
+                    id SERIAL PRIMARY KEY,
+                    device_id VARCHAR(80) NOT NULL,
+                    received_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    data JSONB
+                )
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS device_heartbeats (
                     device_id VARCHAR(80) PRIMARY KEY,
                     last_seen TIMESTAMP NOT NULL,
@@ -508,9 +516,11 @@ def dispositivo_detail(device_id):
         abort(404)
 
     hb = db_one("SELECT * FROM device_heartbeats WHERE device_id = %s", (d["device_id"],))
+    hb_log = db_get("SELECT * FROM device_heartbeat_log WHERE device_id = %s ORDER BY received_at DESC LIMIT 20", (d["device_id"],))
     nodo = db_one("SELECT * FROM nodos WHERE dispositivo_id = %s", (device_id,))
     now = datetime.utcnow()
     online = hb and (now - hb["last_seen"]).total_seconds() < 300
+    minutes_ago = int((now - hb["last_seen"]).total_seconds() / 60) if hb else None
 
     last_data = {}
     if hb and hb.get("last_data"):
@@ -534,8 +544,8 @@ def dispositivo_detail(device_id):
                 db_run("UPDATE timbre_config SET pausado=FALSE, pausado_hasta=NULL, config_version=config_version+1, config_acked=FALSE, updated_at=NOW() WHERE device_id=%s", (d["device_id"],))
                 timbre_cfg = db_one("SELECT * FROM timbre_config WHERE device_id = %s", (d["device_id"],))
 
-    return render_template("dispositivo.html", d=d, hb=hb, nodo=nodo,
-                           online=online, last_data=last_data,
+    return render_template("dispositivo.html", d=d, hb=hb, hb_log=hb_log, nodo=nodo,
+                           online=online, last_data=last_data, minutes_ago=minutes_ago,
                            horarios=horarios, timbre_cfg=timbre_cfg,
                            excepciones=excepciones, vacaciones=vacaciones)
 
@@ -774,12 +784,23 @@ def ingest():
     if not device_id:
         return jsonify({"error": "missing device_id"}), 400
     payload = {k: v for k, v in data.items() if k not in ("api_key", "device_id")}
+    payload_json = json.dumps(payload) if payload else None
     db_run("""
         INSERT INTO device_heartbeats (device_id, last_seen, last_data)
         VALUES (%s, NOW(), %s)
         ON CONFLICT (device_id) DO UPDATE
         SET last_seen = NOW(), last_data = EXCLUDED.last_data
-    """, (device_id, json.dumps(payload)))
+    """, (device_id, payload_json))
+    db_run("INSERT INTO device_heartbeat_log (device_id, data) VALUES (%s, %s)",
+           (device_id, payload_json))
+    db_run("""
+        DELETE FROM device_heartbeat_log
+        WHERE device_id = %s AND id NOT IN (
+            SELECT id FROM device_heartbeat_log
+            WHERE device_id = %s
+            ORDER BY received_at DESC LIMIT 20
+        )
+    """, (device_id, device_id))
     cfg_status = db_one("SELECT config_acked FROM timbre_config WHERE device_id = %s", (device_id,))
     config_changed = bool(cfg_status and not cfg_status["config_acked"])
     return jsonify({"ok": True, "config_changed": config_changed}), 200
