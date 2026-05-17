@@ -61,7 +61,8 @@ def send_verification_email(to_email, username, token):
     # ── Resend API (preferido en Railway) ─────────────────────────────────────
     if RESEND_API_KEY:
         try:
-            from_addr = f"Dation <{SMTP_FROM}>" if SMTP_FROM and "<" not in SMTP_FROM else (SMTP_FROM or "Dation <noreply@dation.com.ar>")
+            _email = SMTP_FROM if "@" in (SMTP_FROM or "") else (SMTP_USER or "noreply@dation.com.ar")
+            from_addr = f"Dation <{_email}>"
             payload = json.dumps({
                 "from": from_addr,
                 "to": [to_email],
@@ -1079,7 +1080,8 @@ def admin_test_email():
     if RESEND_API_KEY:
         results.append(f"Probando Resend API → {to_email}")
         try:
-            from_addr = SMTP_FROM or "Dation <noreply@dation.com.ar>"
+            _email = SMTP_FROM if "@" in (SMTP_FROM or "") else (SMTP_USER or "noreply@dation.com.ar")
+            from_addr = f"Dation <{_email}>"
             payload = json.dumps({
                 "from": from_addr,
                 "to": [to_email],
