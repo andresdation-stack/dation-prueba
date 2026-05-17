@@ -1,5 +1,6 @@
 import os
 import json
+import uuid
 import secrets
 from datetime import datetime, timedelta
 from functools import wraps
@@ -292,6 +293,10 @@ def init_db():
                 ALTER TABLE dispositivos
                 ADD COLUMN IF NOT EXISTS configuracion_id INTEGER REFERENCES configuraciones(id) ON DELETE SET NULL
             """)
+            cur.execute("""
+                ALTER TABLE dispositivos
+                ADD COLUMN IF NOT EXISTS tipo VARCHAR(50) DEFAULT 'otro'
+            """)
             # Admin por defecto
             cur.execute("SELECT id FROM usuarios WHERE is_admin = TRUE LIMIT 1")
             if not cur.fetchone():
@@ -456,6 +461,49 @@ def dispositivo_detail(device_id):
 
     return render_template("dispositivo.html", d=d, hb=hb, nodo=nodo,
                            online=online, last_data=last_data)
+
+
+@app.route("/dispositivo/<int:device_id>/horarios", methods=["GET", "POST"])
+@login_required
+def timbre_horarios_usuario(device_id):
+    if current_user.is_admin:
+        d = db_one("SELECT * FROM dispositivos WHERE id = %s", (device_id,))
+    else:
+        d = db_one("""
+            SELECT d.* FROM dispositivos d
+            INNER JOIN usuario_dispositivos ud ON ud.dispositivo_id = d.id AND ud.usuario_id = %s
+            WHERE d.id = %s
+        """, (current_user.id, device_id))
+    if not d:
+        abort(404)
+    if d.get("tipo") != "timbre":
+        abort(404)
+
+    cfg = db_one("SELECT * FROM timbre_config WHERE device_id = %s", (d["device_id"],))
+    if not cfg:
+        flash("El timbre aún no fue configurado por el administrador.", "error")
+        return redirect(url_for("dispositivo_detail", device_id=device_id))
+
+    if request.method == "POST":
+        hora = request.form.get("hora", "").strip()
+        if hora:
+            existe = db_one("SELECT id FROM timbre_horarios WHERE device_id = %s AND hora = %s",
+                            (d["device_id"], hora))
+            if existe:
+                flash("Ese horario ya existe.", "error")
+            else:
+                db_run("INSERT INTO timbre_horarios (device_id, hora) VALUES (%s, %s)",
+                       (d["device_id"], hora))
+                db_run("""
+                    UPDATE timbre_config
+                    SET config_version = config_version + 1, config_acked = FALSE, updated_at = NOW()
+                    WHERE device_id = %s
+                """, (d["device_id"],))
+                flash("Horario agregado.", "success")
+        return redirect(url_for("timbre_horarios_usuario", device_id=device_id))
+
+    horarios = db_get("SELECT * FROM timbre_horarios WHERE device_id = %s ORDER BY hora", (d["device_id"],))
+    return render_template("timbre_usuario.html", d=d, cfg=cfg, horarios=horarios)
 
 # ── API (ESP32) ────────────────────────────────────────────────────────────────
 
@@ -833,8 +881,8 @@ def _parse_device_form():
     return (
         f.get("empresa_id") or None,
         f.get("nombre", "").strip(),
-        f.get("device_id", "").strip(),
         f.get("icon", "fa-microchip"),
+        f.get("tipo", "otro"),
         "tiene_gps" in f,
         "tiene_caudal" in f, f.get("caudal_factor") or None,
         "tiene_sensor1" in f, f.get("sensor1_nombre",""), f.get("sensor1_icon",""), f.get("sensor1_factor") or None,
@@ -854,13 +902,14 @@ def admin_dispositivos():
 
         if action == "crear":
             params = _parse_device_form()
-            if not params[1] or not params[2]:
-                flash("Nombre y Device ID son requeridos.", "error")
+            if not params[1]:
+                flash("El nombre es requerido.", "error")
             else:
                 try:
+                    device_id = 'dation-' + uuid.uuid4().hex[:8]
                     db_run("""
                         INSERT INTO dispositivos
-                            (empresa_id, nombre, device_id, icon,
+                            (empresa_id, nombre, device_id, icon, tipo,
                              tiene_gps, tiene_caudal, caudal_factor,
                              tiene_sensor1, sensor1_nombre, sensor1_icon, sensor1_factor,
                              tiene_sensor2, sensor2_nombre, sensor2_icon, sensor2_factor,
@@ -868,8 +917,8 @@ def admin_dispositivos():
                              tiene_sensor4, sensor4_nombre, sensor4_icon, sensor4_factor,
                              tiene_sensor5, sensor5_nombre, sensor5_icon, sensor5_factor,
                              tiene_maquina, maquina_ancho, configuracion_id)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                    """, params)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    """, (params[0], params[1], device_id, *params[2:]))
                     flash("Dispositivo creado.", "success")
                 except Exception as e:
                     flash(f"Error: {e}", "error")
@@ -879,7 +928,7 @@ def admin_dispositivos():
             params = _parse_device_form()
             db_run("""
                 UPDATE dispositivos SET
-                    empresa_id=%s, nombre=%s, device_id=%s, icon=%s,
+                    empresa_id=%s, nombre=%s, icon=%s, tipo=%s,
                     tiene_gps=%s, tiene_caudal=%s, caudal_factor=%s,
                     tiene_sensor1=%s, sensor1_nombre=%s, sensor1_icon=%s, sensor1_factor=%s,
                     tiene_sensor2=%s, sensor2_nombre=%s, sensor2_icon=%s, sensor2_factor=%s,

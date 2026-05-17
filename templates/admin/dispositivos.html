@@ -163,16 +163,29 @@
 </div>
 {% endmacro %}
 
-{% macro disp_form(p) %}
+{% macro disp_form(p, editar=false) %}
 <div class="form-grid">
   <div class="form-group span-2">
     <label>Nombre *</label>
     <input type="text" name="nombre" id="{{ p }}_nombre" required/>
   </div>
   <div class="form-group">
-    <label>Device ID *</label>
-    <input type="text" name="device_id" id="{{ p }}_device_id" required/>
+    <label>Tipo *</label>
+    <select name="tipo" id="{{ p }}_tipo">
+      <option value="timbre">Timbre</option>
+      <option value="maquina">Máquina</option>
+      <option value="sensor">Sensor</option>
+      <option value="otro">Otro</option>
+    </select>
   </div>
+  {% if editar %}
+  <div class="form-group">
+    <label>Device ID</label>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+      <code id="{{ p }}_device_id_display" style="color:var(--accent);font-size:13px">–</code>
+    </div>
+  </div>
+  {% endif %}
   <div class="form-group">
     <label>Empresa</label>
     <select name="empresa_id" id="{{ p }}_empresa_id">
@@ -248,7 +261,7 @@
     <form method="POST">
       <input type="hidden" name="action" value="editar"/>
       <input type="hidden" name="id" id="e_id"/>
-      <div class="modal-body">{{ disp_form('e') }}</div>
+      <div class="modal-body">{{ disp_form('e', editar=true) }}</div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeModal('modalEditar')">Cancelar</button>
         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
@@ -389,7 +402,9 @@
     const p = 'e';
     document.getElementById('e_id').value = d.id;
     setVal(`${p}_nombre`, d.nombre);
-    setVal(`${p}_device_id`, d.device_id);
+    setVal(`${p}_tipo`, d.tipo || 'otro');
+    const display = document.getElementById('e_device_id_display');
+    if (display) display.textContent = d.device_id;
     setVal(`${p}_empresa_id`, d.empresa_id);
     setIconVal(`${p}_icon`, d.icon || 'fa-microchip');
     setVal(`${p}_configuracion_id`, d.configuracion_id);

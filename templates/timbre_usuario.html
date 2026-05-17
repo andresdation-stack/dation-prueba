@@ -1,0 +1,102 @@
+{% extends "app_base.html" %}
+{% block title %}Horarios – {{ d.nombre }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="{{ url_for('dispositivo_detail', device_id=d.id) }}" style="font-size:13px;color:var(--text-muted)">
+      <i class="fas fa-arrow-left"></i> {{ d.nombre }}
+    </a>
+    <div class="page-title" style="margin-top:6px">Horarios del timbre</div>
+    <div class="page-subtitle">{{ d.nombre }}</div>
+  </div>
+  {% if cfg.config_acked %}
+  <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#4ade80">
+    <i class="fas fa-check-circle"></i> Aplicado
+  </div>
+  {% else %}
+  <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#fb923c">
+    <i class="fas fa-clock"></i> Pendiente de aplicar
+  </div>
+  {% endif %}
+</div>
+
+<div class="page-body" style="max-width:560px">
+
+  <!-- Días activos (solo lectura) -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:12px">Días activos</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      {% for num, label in [(1,'L'),(2,'M'),(3,'X'),(4,'J'),(5,'V'),(6,'S'),(7,'D')] %}
+      <div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+                  font-size:13px;font-weight:600;
+                  {% if num in cfg.dias_semana %}background:var(--accent);color:#fff;{% else %}background:var(--surface2);color:var(--text-muted);border:2px solid var(--border);{% endif %}">
+        {{ label }}
+      </div>
+      {% endfor %}
+    </div>
+    <div style="margin-top:12px;font-size:13px;color:var(--text-muted)">
+      <i class="fas fa-stopwatch" style="width:16px"></i> Duración: <strong style="color:var(--text)">{{ cfg.duracion_seg }} segundo{% if cfg.duracion_seg != 1 %}s{% endif %}</strong>
+    </div>
+  </div>
+
+  <!-- Horarios -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Horarios</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+          {{ horarios|length }} horario{% if horarios|length != 1 %}s{% endif %} configurado{% if horarios|length != 1 %}s{% endif %}
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary" style="font-size:12px" onclick="abrirAgregar()">
+        <i class="fas fa-plus"></i> Agregar
+      </button>
+    </div>
+
+    <!-- Fila para agregar (oculta) -->
+    <div id="rowAgregar" style="display:none;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;margin-bottom:10px">
+      <i class="fas fa-clock" style="color:var(--accent);font-size:13px"></i>
+      <form method="POST" style="display:flex;align-items:center;gap:8px;flex:1">
+        <input type="time" name="hora" id="inputHora" required style="font-size:15px;font-weight:600;width:110px"/>
+        <button type="submit" class="btn btn-primary" style="font-size:12px;padding:4px 12px">Guardar</button>
+        <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="cancelarAgregar()">Cancelar</button>
+      </form>
+    </div>
+
+    <!-- Lista -->
+    {% if horarios %}
+    <div>
+      {% for h in horarios %}
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--border)">
+        <i class="fas fa-bell" style="color:var(--accent);font-size:13px;flex-shrink:0"></i>
+        <span style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">{{ h.hora.strftime('%H:%M') }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:32px;color:var(--text-muted);font-size:13px">
+      <i class="fas fa-bell-slash" style="font-size:28px;opacity:.3;display:block;margin-bottom:10px"></i>
+      Sin horarios configurados todavía.
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function abrirAgregar() {
+    document.getElementById('rowAgregar').style.display = 'flex';
+    document.getElementById('inputHora').focus();
+  }
+  function cancelarAgregar() {
+    document.getElementById('rowAgregar').style.display = 'none';
+    document.getElementById('inputHora').value = '';
+  }
+  document.getElementById('inputHora').addEventListener('keydown', e => {
+    if (e.key === 'Escape') cancelarAgregar();
+  });
+</script>
+{% endblock %}
