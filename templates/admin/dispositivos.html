@@ -61,6 +61,7 @@
       <a href="{{ url_for('admin_usuarios') }}" class="subnav-item"><i class="fas fa-users"></i> Usuarios</a>
       <a href="{{ url_for('admin_empresas') }}" class="subnav-item"><i class="fas fa-building"></i> Empresas</a>
       <a href="{{ url_for('admin_nodos') }}" class="subnav-item"><i class="fas fa-microchip"></i> Nodos</a>
+      <a href="{{ url_for('admin_tipos') }}" class="subnav-item"><i class="fas fa-tags"></i> Tipos</a>
       <a href="{{ url_for('admin_dispositivos') }}" class="subnav-item active"><i class="fas fa-th-large"></i> Dispositivos</a>
       <a href="{{ url_for('admin_estados') }}" class="subnav-item"><i class="fas fa-circle"></i> Estados</a>
       <a href="{{ url_for('admin_configuraciones') }}" class="subnav-item"><i class="fas fa-sliders-h"></i> Configuraciones</a>
@@ -88,7 +89,7 @@
           <th>Nombre</th>
           <th>Device ID</th>
           <th>Empresa</th>
-          <th>Capacidades</th>
+          <th>Tipo</th>
           <th style="width:100px"></th>
         </tr>
       </thead>
@@ -106,12 +107,13 @@
           <td><code style="color:var(--accent);font-size:13px">{{ d.device_id }}</code></td>
           <td class="td-muted">{{ d.empresa_nombre or '–' }}</td>
           <td>
-            <div style="display:flex;gap:4px;flex-wrap:wrap">
-              {% if d.tiene_gps %}<span class="badge badge-user"><i class="fas fa-map-marker-alt"></i> GPS</span>{% endif %}
-              {% if d.tiene_caudal %}<span class="badge badge-user"><i class="fas fa-water"></i> Caudal</span>{% endif %}
-              {% if d.tiene_maquina %}<span class="badge badge-user"><i class="fas fa-tractor"></i> Máquina</span>{% endif %}
-              {% for i in range(1,6) %}{% if d['tiene_sensor'~i] %}<span class="badge badge-user">S{{ i }}</span>{% endif %}{% endfor %}
-            </div>
+            {% if d.tipo_nombre %}
+            <span class="badge badge-user">
+              <i class="fas {{ d.tipo_icono or 'fa-microchip' }}"></i> {{ d.tipo_nombre }}
+            </span>
+            {% else %}
+            <span style="color:var(--text-muted);font-size:13px">Sin tipo</span>
+            {% endif %}
           </td>
           <td>
             <div style="display:flex;gap:6px">
@@ -137,32 +139,6 @@
 <input type="hidden" name="{{ field }}" id="{{ p }}_{{ field }}" value="{{ default_icon }}"/>
 {% endmacro %}
 
-{% macro sensor_fields(p, i) %}
-<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px" id="{{ p }}_s{{ i }}_block">
-  <div class="form-check" style="margin-bottom:8px">
-    <input type="checkbox" id="{{ p }}_tiene_sensor{{ i }}" name="tiene_sensor{{ i }}"
-           onchange="toggleSensor('{{ p }}',{{ i }})"/>
-    <label for="{{ p }}_tiene_sensor{{ i }}">Sensor {{ i }}</label>
-  </div>
-  <div id="{{ p }}_sensor{{ i }}_opts" style="display:none">
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
-      <div class="form-group">
-        <label>Nombre</label>
-        <input type="text" name="sensor{{ i }}_nombre" id="{{ p }}_sensor{{ i }}_nombre"/>
-      </div>
-      <div class="form-group">
-        <label>Ícono</label>
-        {{ icon_trigger(p, 'sensor'~i~'_icon', 'fa-tachometer-alt') }}
-      </div>
-      <div class="form-group">
-        <label>Factor corrección</label>
-        <input type="number" step="any" name="sensor{{ i }}_factor" id="{{ p }}_sensor{{ i }}_factor"/>
-      </div>
-    </div>
-  </div>
-</div>
-{% endmacro %}
-
 {% macro disp_form(p, editar=false) %}
 <div class="form-grid">
   <div class="form-group span-2">
@@ -171,11 +147,11 @@
   </div>
   <div class="form-group">
     <label>Tipo *</label>
-    <select name="tipo" id="{{ p }}_tipo">
-      <option value="timbre">Timbre</option>
-      <option value="maquina">Máquina</option>
-      <option value="sensor">Sensor</option>
-      <option value="otro">Otro</option>
+    <select name="tipo_id" id="{{ p }}_tipo_id" onchange="updateCapacidades('{{ p }}', this.value)" required>
+      <option value="">Seleccionar tipo...</option>
+      {% for t in tipos %}
+      <option value="{{ t.id }}">{{ t.nombre }}</option>
+      {% endfor %}
     </select>
   </div>
   {% if editar %}
@@ -208,27 +184,37 @@
   </div>
 </div>
 
-<div class="form-section">Capacidades</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-  <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-    <div class="form-check"><input type="checkbox" id="{{ p }}_gps" name="tiene_gps"/><label for="{{ p }}_gps">GPS</label></div>
-  </div>
-  <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-    <div class="form-check"><input type="checkbox" id="{{ p }}_caudal" name="tiene_caudal" onchange="toggleCaudal('{{ p }}')"/><label for="{{ p }}_caudal">Caudal</label></div>
-    <div id="{{ p }}_caudal_opts" style="display:none;margin-top:8px">
-      <div class="form-group"><label>Factor de corrección</label><input type="number" step="any" name="caudal_factor" id="{{ p }}_caudal_factor"/></div>
+<!-- Configuración de capacidades (visible según tipo) -->
+<div id="{{ p }}_capacidades" style="display:none">
+  <div id="{{ p }}_caudal_section" style="display:none;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
+    <div class="form-section" style="margin:0 0 8px">Caudal</div>
+    <div class="form-group"><label>Factor de corrección</label>
+      <input type="number" step="any" name="caudal_factor" id="{{ p }}_caudal_factor"/>
     </div>
   </div>
-  <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-    <div class="form-check"><input type="checkbox" id="{{ p }}_maquina" name="tiene_maquina" onchange="toggleMaquina('{{ p }}')"/><label for="{{ p }}_maquina">Máquina</label></div>
-    <div id="{{ p }}_maquina_opts" style="display:none;margin-top:8px">
-      <div class="form-group"><label>Ancho</label><input type="number" step="any" name="maquina_ancho" id="{{ p }}_maquina_ancho"/></div>
+  <div id="{{ p }}_maquina_section" style="display:none;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
+    <div class="form-section" style="margin:0 0 8px">Máquina</div>
+    <div class="form-group"><label>Ancho (mm)</label>
+      <input type="number" step="any" name="maquina_ancho" id="{{ p }}_maquina_ancho"/>
     </div>
   </div>
+  {% for i in range(1,6) %}
+  <div id="{{ p }}_sensor{{ i }}_section" style="display:none;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
+    <div class="form-section" style="margin:0 0 8px">Sensor {{ i }}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div class="form-group"><label>Nombre</label>
+        <input type="text" name="sensor{{ i }}_nombre" id="{{ p }}_sensor{{ i }}_nombre"/>
+      </div>
+      <div class="form-group"><label>Ícono</label>
+        {{ icon_trigger(p, 'sensor'~i~'_icon', 'fa-tachometer-alt') }}
+      </div>
+      <div class="form-group"><label>Factor corrección</label>
+        <input type="number" step="any" name="sensor{{ i }}_factor" id="{{ p }}_sensor{{ i }}_factor"/>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
 </div>
-
-<div class="form-section">Sensores</div>
-{% for i in range(1,6) %}{{ sensor_fields(p, i) }}{% endfor %}
 {% endmacro %}
 
 {# ── Modales principales ─────────────────────────────────────────────────── #}
@@ -361,21 +347,19 @@
     });
   });
 
-  // ── Toggle helpers ────────────────────────────────────────────────────────
-  function toggleSensor(p, i) {
-    const cb = document.getElementById(`${p}_tiene_sensor${i}`);
-    const opts = document.getElementById(`${p}_sensor${i}_opts`);
-    if (opts) opts.style.display = cb.checked ? '' : 'none';
-  }
-  function toggleCaudal(p) {
-    const cb = document.getElementById(`${p}_caudal`);
-    const opts = document.getElementById(`${p}_caudal_opts`);
-    if (opts) opts.style.display = cb.checked ? '' : 'none';
-  }
-  function toggleMaquina(p) {
-    const cb = document.getElementById(`${p}_maquina`);
-    const opts = document.getElementById(`${p}_maquina_opts`);
-    if (opts) opts.style.display = cb.checked ? '' : 'none';
+  // ── Tipos data ────────────────────────────────────────────────────────────
+  const TIPOS_DATA = {{ tipos|tojson }};
+
+  function updateCapacidades(p, tipo_id) {
+    const tipo = TIPOS_DATA.find(t => String(t.id) === String(tipo_id)) || {};
+    const wrap = document.getElementById(`${p}_capacidades`);
+    if (!wrap) return;
+    wrap.style.display = tipo_id ? '' : 'none';
+    document.getElementById(`${p}_caudal_section`).style.display  = tipo.tiene_caudal  ? '' : 'none';
+    document.getElementById(`${p}_maquina_section`).style.display = tipo.tiene_maquina ? '' : 'none';
+    for (let i = 1; i <= 5; i++) {
+      document.getElementById(`${p}_sensor${i}_section`).style.display = tipo[`tiene_sensor${i}`] ? '' : 'none';
+    }
   }
 
   // ── Generic field setter ──────────────────────────────────────────────────
@@ -402,25 +386,19 @@
     const p = 'e';
     document.getElementById('e_id').value = d.id;
     setVal(`${p}_nombre`, d.nombre);
-    setVal(`${p}_tipo`, d.tipo || 'otro');
+    setVal(`${p}_tipo_id`, d.tipo_id);
+    updateCapacidades(p, d.tipo_id);
     const display = document.getElementById('e_device_id_display');
     if (display) display.textContent = d.device_id;
     setVal(`${p}_empresa_id`, d.empresa_id);
     setIconVal(`${p}_icon`, d.icon || 'fa-microchip');
     setVal(`${p}_configuracion_id`, d.configuracion_id);
-    setVal(`${p}_gps`, d.tiene_gps);
-    setVal(`${p}_caudal`, d.tiene_caudal);
     setVal(`${p}_caudal_factor`, d.caudal_factor);
-    toggleCaudal(p);
-    setVal(`${p}_maquina`, d.tiene_maquina);
     setVal(`${p}_maquina_ancho`, d.maquina_ancho);
-    toggleMaquina(p);
     for (let i = 1; i <= 5; i++) {
-      setVal(`${p}_tiene_sensor${i}`, d[`tiene_sensor${i}`]);
       setVal(`${p}_sensor${i}_nombre`, d[`sensor${i}_nombre`]);
       setIconVal(`${p}_sensor${i}_icon`, d[`sensor${i}_icon`] || 'fa-tachometer-alt');
       setVal(`${p}_sensor${i}_factor`, d[`sensor${i}_factor`]);
-      toggleSensor(p, i);
     }
     openModal('modalEditar');
   }

@@ -288,15 +288,38 @@ def init_db():
                     descripcion VARCHAR(200)
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tipos_dispositivo (
+                    id SERIAL PRIMARY KEY,
+                    nombre VARCHAR(100) NOT NULL,
+                    icono VARCHAR(80) DEFAULT 'fa-microchip',
+                    tiene_gps BOOLEAN DEFAULT FALSE,
+                    tiene_caudal BOOLEAN DEFAULT FALSE,
+                    tiene_sensor1 BOOLEAN DEFAULT FALSE,
+                    tiene_sensor2 BOOLEAN DEFAULT FALSE,
+                    tiene_sensor3 BOOLEAN DEFAULT FALSE,
+                    tiene_sensor4 BOOLEAN DEFAULT FALSE,
+                    tiene_sensor5 BOOLEAN DEFAULT FALSE,
+                    tiene_maquina BOOLEAN DEFAULT FALSE,
+                    tiene_horarios BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
             # Migraciones de columnas nuevas
             cur.execute("""
                 ALTER TABLE dispositivos
                 ADD COLUMN IF NOT EXISTS configuracion_id INTEGER REFERENCES configuraciones(id) ON DELETE SET NULL
             """)
-            cur.execute("""
-                ALTER TABLE dispositivos
-                ADD COLUMN IF NOT EXISTS tipo VARCHAR(50) DEFAULT 'otro'
-            """)
+            cur.execute("ALTER TABLE dispositivos ADD COLUMN IF NOT EXISTS tipo_id INTEGER REFERENCES tipos_dispositivo(id) ON DELETE SET NULL")
+            cur.execute("ALTER TABLE dispositivos DROP COLUMN IF EXISTS tipo")
+            cur.execute("ALTER TABLE dispositivos DROP COLUMN IF EXISTS tiene_gps")
+            cur.execute("ALTER TABLE dispositivos DROP COLUMN IF EXISTS tiene_caudal")
+            cur.execute("ALTER TABLE dispositivos DROP COLUMN IF EXISTS tiene_maquina")
+            cur.execute("ALTER TABLE dispositivos DROP COLUMN IF EXISTS tiene_sensor1")
+            cur.execute("ALTER TABLE dispositivos DROP COLUMN IF EXISTS tiene_sensor2")
+            cur.execute("ALTER TABLE dispositivos DROP COLUMN IF EXISTS tiene_sensor3")
+            cur.execute("ALTER TABLE dispositivos DROP COLUMN IF EXISTS tiene_sensor4")
+            cur.execute("ALTER TABLE dispositivos DROP COLUMN IF EXISTS tiene_sensor5")
             # Admin por defecto
             cur.execute("SELECT id FROM usuarios WHERE is_admin = TRUE LIMIT 1")
             if not cur.fetchone():
@@ -425,20 +448,36 @@ def dashboard():
 
 # ── Dispositivo detalle ────────────────────────────────────────────────────────
 
+_TIPO_COLS = """
+    COALESCE(t.tiene_gps, FALSE)      AS tiene_gps,
+    COALESCE(t.tiene_caudal, FALSE)   AS tiene_caudal,
+    COALESCE(t.tiene_sensor1, FALSE)  AS tiene_sensor1,
+    COALESCE(t.tiene_sensor2, FALSE)  AS tiene_sensor2,
+    COALESCE(t.tiene_sensor3, FALSE)  AS tiene_sensor3,
+    COALESCE(t.tiene_sensor4, FALSE)  AS tiene_sensor4,
+    COALESCE(t.tiene_sensor5, FALSE)  AS tiene_sensor5,
+    COALESCE(t.tiene_maquina, FALSE)  AS tiene_maquina,
+    COALESCE(t.tiene_horarios, FALSE) AS tiene_horarios,
+    t.nombre AS tipo_nombre
+"""
+
 @app.get("/dispositivo/<int:device_id>")
 @login_required
 def dispositivo_detail(device_id):
     if current_user.is_admin:
-        d = db_one("""
-            SELECT d.*, e.nombre AS empresa_nombre
-            FROM dispositivos d LEFT JOIN empresas e ON e.id = d.empresa_id
+        d = db_one(f"""
+            SELECT d.*, e.nombre AS empresa_nombre, {_TIPO_COLS}
+            FROM dispositivos d
+            LEFT JOIN empresas e ON e.id = d.empresa_id
+            LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
             WHERE d.id = %s
         """, (device_id,))
     else:
-        d = db_one("""
-            SELECT d.*, e.nombre AS empresa_nombre
+        d = db_one(f"""
+            SELECT d.*, e.nombre AS empresa_nombre, {_TIPO_COLS}
             FROM dispositivos d
             LEFT JOIN empresas e ON e.id = d.empresa_id
+            LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
             INNER JOIN usuario_dispositivos ud
                 ON ud.dispositivo_id = d.id AND ud.usuario_id = %s
             WHERE d.id = %s
@@ -467,16 +506,23 @@ def dispositivo_detail(device_id):
 @login_required
 def timbre_horarios_usuario(device_id):
     if current_user.is_admin:
-        d = db_one("SELECT * FROM dispositivos WHERE id = %s", (device_id,))
+        d = db_one(f"""
+            SELECT d.*, {_TIPO_COLS}
+            FROM dispositivos d
+            LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
+            WHERE d.id = %s
+        """, (device_id,))
     else:
-        d = db_one("""
-            SELECT d.* FROM dispositivos d
+        d = db_one(f"""
+            SELECT d.*, {_TIPO_COLS}
+            FROM dispositivos d
+            LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
             INNER JOIN usuario_dispositivos ud ON ud.dispositivo_id = d.id AND ud.usuario_id = %s
             WHERE d.id = %s
         """, (current_user.id, device_id))
     if not d:
         abort(404)
-    if d.get("tipo") != "timbre":
+    if not d.get("tiene_horarios"):
         abort(404)
 
     cfg = db_one("SELECT * FROM timbre_config WHERE device_id = %s", (d["device_id"],))
@@ -536,7 +582,12 @@ def device_config_get(device_id):
     key = request.args.get("api_key") or request.headers.get("X-API-Key", "")
     if key != API_KEY:
         return jsonify({"error": "unauthorized"}), 401
-    d = db_one("SELECT * FROM dispositivos WHERE device_id = %s", (device_id,))
+    d = db_one(f"""
+        SELECT d.*, {_TIPO_COLS}
+        FROM dispositivos d
+        LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
+        WHERE d.device_id = %s
+    """, (device_id,))
     if not d:
         return jsonify({"error": "not found"}), 404
     sensores = []
@@ -882,15 +933,14 @@ def _parse_device_form():
         f.get("empresa_id") or None,
         f.get("nombre", "").strip(),
         f.get("icon", "fa-microchip"),
-        f.get("tipo", "otro"),
-        "tiene_gps" in f,
-        "tiene_caudal" in f, f.get("caudal_factor") or None,
-        "tiene_sensor1" in f, f.get("sensor1_nombre",""), f.get("sensor1_icon",""), f.get("sensor1_factor") or None,
-        "tiene_sensor2" in f, f.get("sensor2_nombre",""), f.get("sensor2_icon",""), f.get("sensor2_factor") or None,
-        "tiene_sensor3" in f, f.get("sensor3_nombre",""), f.get("sensor3_icon",""), f.get("sensor3_factor") or None,
-        "tiene_sensor4" in f, f.get("sensor4_nombre",""), f.get("sensor4_icon",""), f.get("sensor4_factor") or None,
-        "tiene_sensor5" in f, f.get("sensor5_nombre",""), f.get("sensor5_icon",""), f.get("sensor5_factor") or None,
-        "tiene_maquina" in f, f.get("maquina_ancho") or None,
+        f.get("tipo_id") or None,
+        f.get("caudal_factor") or None,
+        f.get("sensor1_nombre",""), f.get("sensor1_icon",""), f.get("sensor1_factor") or None,
+        f.get("sensor2_nombre",""), f.get("sensor2_icon",""), f.get("sensor2_factor") or None,
+        f.get("sensor3_nombre",""), f.get("sensor3_icon",""), f.get("sensor3_factor") or None,
+        f.get("sensor4_nombre",""), f.get("sensor4_icon",""), f.get("sensor4_factor") or None,
+        f.get("sensor5_nombre",""), f.get("sensor5_icon",""), f.get("sensor5_factor") or None,
+        f.get("maquina_ancho") or None,
         f.get("configuracion_id") or None,
     )
 
@@ -909,15 +959,15 @@ def admin_dispositivos():
                     device_id = 'dation-' + uuid.uuid4().hex[:8]
                     db_run("""
                         INSERT INTO dispositivos
-                            (empresa_id, nombre, device_id, icon, tipo,
-                             tiene_gps, tiene_caudal, caudal_factor,
-                             tiene_sensor1, sensor1_nombre, sensor1_icon, sensor1_factor,
-                             tiene_sensor2, sensor2_nombre, sensor2_icon, sensor2_factor,
-                             tiene_sensor3, sensor3_nombre, sensor3_icon, sensor3_factor,
-                             tiene_sensor4, sensor4_nombre, sensor4_icon, sensor4_factor,
-                             tiene_sensor5, sensor5_nombre, sensor5_icon, sensor5_factor,
-                             tiene_maquina, maquina_ancho, configuracion_id)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            (empresa_id, nombre, device_id, icon, tipo_id,
+                             caudal_factor,
+                             sensor1_nombre, sensor1_icon, sensor1_factor,
+                             sensor2_nombre, sensor2_icon, sensor2_factor,
+                             sensor3_nombre, sensor3_icon, sensor3_factor,
+                             sensor4_nombre, sensor4_icon, sensor4_factor,
+                             sensor5_nombre, sensor5_icon, sensor5_factor,
+                             maquina_ancho, configuracion_id)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """, (params[0], params[1], device_id, *params[2:]))
                     flash("Dispositivo creado.", "success")
                 except Exception as e:
@@ -928,14 +978,14 @@ def admin_dispositivos():
             params = _parse_device_form()
             db_run("""
                 UPDATE dispositivos SET
-                    empresa_id=%s, nombre=%s, icon=%s, tipo=%s,
-                    tiene_gps=%s, tiene_caudal=%s, caudal_factor=%s,
-                    tiene_sensor1=%s, sensor1_nombre=%s, sensor1_icon=%s, sensor1_factor=%s,
-                    tiene_sensor2=%s, sensor2_nombre=%s, sensor2_icon=%s, sensor2_factor=%s,
-                    tiene_sensor3=%s, sensor3_nombre=%s, sensor3_icon=%s, sensor3_factor=%s,
-                    tiene_sensor4=%s, sensor4_nombre=%s, sensor4_icon=%s, sensor4_factor=%s,
-                    tiene_sensor5=%s, sensor5_nombre=%s, sensor5_icon=%s, sensor5_factor=%s,
-                    tiene_maquina=%s, maquina_ancho=%s, configuracion_id=%s
+                    empresa_id=%s, nombre=%s, icon=%s, tipo_id=%s,
+                    caudal_factor=%s,
+                    sensor1_nombre=%s, sensor1_icon=%s, sensor1_factor=%s,
+                    sensor2_nombre=%s, sensor2_icon=%s, sensor2_factor=%s,
+                    sensor3_nombre=%s, sensor3_icon=%s, sensor3_factor=%s,
+                    sensor4_nombre=%s, sensor4_icon=%s, sensor4_factor=%s,
+                    sensor5_nombre=%s, sensor5_icon=%s, sensor5_factor=%s,
+                    maquina_ancho=%s, configuracion_id=%s
                 WHERE id=%s
             """, params + (did,))
             flash("Dispositivo actualizado.", "success")
@@ -959,12 +1009,16 @@ def admin_dispositivos():
         return redirect(url_for("admin_dispositivos"))
 
     dispositivos = db_get("""
-        SELECT d.*, e.nombre AS empresa_nombre
-        FROM dispositivos d LEFT JOIN empresas e ON e.id = d.empresa_id
+        SELECT d.*, e.nombre AS empresa_nombre,
+               t.nombre AS tipo_nombre, t.icono AS tipo_icono
+        FROM dispositivos d
+        LEFT JOIN empresas e ON e.id = d.empresa_id
+        LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
         ORDER BY d.nombre
     """)
     empresas = db_get("SELECT id, nombre FROM empresas ORDER BY nombre")
     configuraciones = db_get("SELECT id, nombre FROM configuraciones ORDER BY nombre")
+    tipos = db_get("SELECT * FROM tipos_dispositivo ORDER BY nombre")
     usuarios = db_get("""
         SELECT id, username, nombre, apellido FROM usuarios
         WHERE NOT is_admin ORDER BY username
@@ -975,7 +1029,7 @@ def admin_dispositivos():
         permisos.setdefault(p["usuario_id"], []).append(p["dispositivo_id"])
     return render_template("admin/dispositivos.html", dispositivos=dispositivos,
                            empresas=empresas, configuraciones=configuraciones,
-                           usuarios=usuarios, permisos=permisos)
+                           tipos=tipos, usuarios=usuarios, permisos=permisos)
 
 # ── Admin: Estados ─────────────────────────────────────────────────────────────
 
@@ -1095,13 +1149,83 @@ def admin_configuracion_edit(cid):
                            config=config, config_estados=config_estados,
                            estados_disponibles=estados_disponibles)
 
+# ── Admin: Tipos de dispositivo ────────────────────────────────────────────────
+
+@app.route("/admin/tipos", methods=["GET", "POST"])
+@admin_required
+def admin_tipos():
+    if request.method == "POST":
+        action = request.form.get("action")
+        f = request.form
+
+        def tipo_params(include_nombre=True):
+            base = []
+            if include_nombre:
+                base.append(f.get("nombre", "").strip())
+            base += [
+                f.get("icono", "fa-microchip"),
+                "tiene_gps" in f,
+                "tiene_caudal" in f,
+                "tiene_sensor1" in f,
+                "tiene_sensor2" in f,
+                "tiene_sensor3" in f,
+                "tiene_sensor4" in f,
+                "tiene_sensor5" in f,
+                "tiene_maquina" in f,
+                "tiene_horarios" in f,
+            ]
+            return base
+
+        if action == "crear":
+            nombre = f.get("nombre", "").strip()
+            if not nombre:
+                flash("El nombre es requerido.", "error")
+            else:
+                db_run("""
+                    INSERT INTO tipos_dispositivo
+                        (nombre, icono, tiene_gps, tiene_caudal,
+                         tiene_sensor1, tiene_sensor2, tiene_sensor3,
+                         tiene_sensor4, tiene_sensor5, tiene_maquina, tiene_horarios)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, tipo_params())
+                flash("Tipo creado.", "success")
+
+        elif action == "editar":
+            tid = f.get("id")
+            nombre = f.get("nombre", "").strip()
+            if nombre and tid:
+                db_run("""
+                    UPDATE tipos_dispositivo SET
+                        nombre=%s, icono=%s,
+                        tiene_gps=%s, tiene_caudal=%s,
+                        tiene_sensor1=%s, tiene_sensor2=%s, tiene_sensor3=%s,
+                        tiene_sensor4=%s, tiene_sensor5=%s,
+                        tiene_maquina=%s, tiene_horarios=%s
+                    WHERE id=%s
+                """, tipo_params() + [tid])
+                flash("Tipo actualizado.", "success")
+
+        elif action == "eliminar":
+            db_run("DELETE FROM tipos_dispositivo WHERE id=%s", (f.get("id"),))
+            flash("Tipo eliminado.", "success")
+
+        return redirect(url_for("admin_tipos"))
+
+    tipos = db_get("SELECT * FROM tipos_dispositivo ORDER BY nombre")
+    return render_template("admin/tipos.html", tipos=tipos)
+
 # ── Admin: Timbre ──────────────────────────────────────────────────────────────
 
 @app.route("/admin/timbre/<device_id>", methods=["GET", "POST"])
 @admin_required
 def admin_timbre(device_id):
-    dispositivo = db_one("SELECT * FROM dispositivos WHERE device_id = %s", (device_id,))
-    if not dispositivo:
+    dispositivo = db_one(f"""
+        SELECT d.*, {_TIPO_COLS}
+        FROM dispositivos d
+        LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
+        WHERE d.device_id = %s
+    """, (device_id,))
+    if not dispositivo or not dispositivo.get("tiene_horarios"):
         abort(404)
 
     if request.method == "POST":
