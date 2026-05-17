@@ -947,7 +947,9 @@ def not_found(e):
 
 @app.errorhandler(500)
 def server_error(e):
-    return render_template("error.html", code=500, msg=f"Error interno: {e}"), 500
+    import traceback
+    tb = traceback.format_exc()
+    return f"<pre style='padding:20px;font-size:13px'><b>500 Error:</b> {e}\n\n{tb}</pre>", 500
 
 # ── Startup ────────────────────────────────────────────────────────────────────
 
