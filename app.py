@@ -2,6 +2,9 @@ import os
 import json
 import uuid
 import secrets
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -19,6 +22,56 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 API_KEY = os.environ.get("API_KEY", "andres-123")
+
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER)
+APP_URL   = os.environ.get("APP_URL", "http://localhost:5000")
+
+# ── Email ──────────────────────────────────────────────────────────────────────
+
+def send_verification_email(to_email, username, token):
+    if not SMTP_HOST or not SMTP_USER:
+        app.logger.warning("SMTP not configured — skipping verification email")
+        return False
+    verify_url = f"{APP_URL}/verificar/{token}"
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Verificá tu cuenta – Dation"
+    msg["From"]    = SMTP_FROM
+    msg["To"]      = to_email
+    text = (
+        f"Hola {username},\n\n"
+        f"Verificá tu cuenta haciendo clic en el siguiente enlace:\n{verify_url}\n\n"
+        "Este enlace expira en 24 horas.\n\nEquipo Dation"
+    )
+    html = f"""
+    <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#111;border-radius:12px">
+      <div style="font-size:22px;font-weight:700;color:#f97316;margin-bottom:8px">Dation</div>
+      <div style="font-size:16px;font-weight:600;color:#f4f4f5;margin-bottom:16px">Verificá tu cuenta</div>
+      <p style="color:#a1a1aa;font-size:14px">Hola <strong style="color:#f4f4f5">{username}</strong>,<br>
+      Hacé clic en el botón para activar tu cuenta.</p>
+      <a href="{verify_url}"
+         style="display:inline-block;margin:20px 0;padding:12px 28px;background:#f97316;color:#fff;
+                border-radius:8px;font-weight:600;font-size:14px;text-decoration:none">
+        Verificar email
+      </a>
+      <p style="color:#52525b;font-size:12px">Este enlace expira en 24 horas.<br>
+      Si no te registraste, ignorá este mensaje.</p>
+    </div>"""
+    msg.attach(MIMEText(text, "plain"))
+    msg.attach(MIMEText(html, "html"))
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as srv:
+            srv.ehlo()
+            srv.starttls()
+            srv.login(SMTP_USER, SMTP_PASS)
+            srv.sendmail(SMTP_FROM, to_email, msg.as_string())
+        return True
+    except Exception as e:
+        app.logger.error(f"Email send error: {e}")
+        return False
 
 # ── DB helpers ─────────────────────────────────────────────────────────────────
 
@@ -77,6 +130,8 @@ class User(UserMixin):
         self.nombre = row.get("nombre") or ""
         self.apellido = row.get("apellido") or ""
         self.empresa_id = row.get("empresa_id")
+        self.email = row.get("email") or ""
+        self.email_verificado = row.get("email_verificado", True)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -314,6 +369,9 @@ def init_db():
                 )
             """)
             # Migraciones de columnas nuevas
+            cur.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN DEFAULT TRUE")
+            cur.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS verification_token VARCHAR(120)")
+            cur.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS token_expiry TIMESTAMP")
             cur.execute("ALTER TABLE timbre_config ADD COLUMN IF NOT EXISTS pausado BOOLEAN DEFAULT FALSE")
             cur.execute("ALTER TABLE timbre_config ADD COLUMN IF NOT EXISTS pausado_hasta TIMESTAMP")
             cur.execute("ALTER TABLE timbre_horarios ADD COLUMN IF NOT EXISTS dias_semana INTEGER[] DEFAULT '{1,2,3,4,5}'")
@@ -393,10 +451,72 @@ def login_view():
         password = request.form.get("password", "")
         row = db_one("SELECT * FROM usuarios WHERE username = %s", (username,))
         if row and check_password_hash(row["password_hash"], password):
-            login_user(User(row))
-            return redirect(url_for("dashboard"))
-        flash("Usuario o contraseña incorrectos.", "error")
+            if not row.get("email_verificado", True):
+                flash("Verificá tu email antes de ingresar. Revisá tu bandeja de entrada.", "error")
+            else:
+                login_user(User(row))
+                return redirect(url_for("dashboard"))
+        else:
+            flash("Usuario o contraseña incorrectos.", "error")
     return render_template("login.html")
+
+@app.route("/registro", methods=["GET", "POST"])
+def registro():
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
+    error = None
+    form_data = {}
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        email    = request.form.get("email", "").strip().lower()
+        nombre   = request.form.get("nombre", "").strip()
+        password = request.form.get("password", "")
+        confirm  = request.form.get("confirm", "")
+        form_data = {"username": username, "email": email, "nombre": nombre}
+        if not username or not email or not password:
+            error = "Todos los campos son obligatorios."
+        elif password != confirm:
+            error = "Las contraseñas no coinciden."
+        elif len(password) < 6:
+            error = "La contraseña debe tener al menos 6 caracteres."
+        elif db_one("SELECT id FROM usuarios WHERE username = %s", (username,)):
+            error = "Ese nombre de usuario ya está en uso."
+        elif db_one("SELECT id FROM usuarios WHERE email = %s", (email,)):
+            error = "Ese email ya está registrado."
+        if not error:
+            token  = secrets.token_urlsafe(48)
+            expiry = datetime.utcnow() + timedelta(hours=24)
+            db_run("""
+                INSERT INTO usuarios
+                    (username, email, nombre, password_hash, is_admin, email_verificado, verification_token, token_expiry)
+                VALUES (%s, %s, %s, %s, FALSE, FALSE, %s, %s)
+            """, (username, email, nombre or None, generate_password_hash(password), token, expiry))
+            sent = send_verification_email(email, username, token)
+            if sent:
+                flash("Cuenta creada. Revisá tu email para verificarla.", "success")
+            else:
+                flash("Cuenta creada, pero no se pudo enviar el email de verificación. Contactá al administrador.", "error")
+            return redirect(url_for("login_view"))
+    return render_template("registro.html", error=error, form=form_data)
+
+
+@app.get("/verificar/<token>")
+def verificar_email(token):
+    u = db_one("SELECT * FROM usuarios WHERE verification_token = %s", (token,))
+    if not u:
+        flash("El enlace es inválido o ya fue utilizado.", "error")
+        return redirect(url_for("login_view"))
+    if u["token_expiry"] and u["token_expiry"] < datetime.utcnow():
+        flash("El enlace expiró. Contactá al administrador para que reactive tu cuenta.", "error")
+        return redirect(url_for("login_view"))
+    db_run("""
+        UPDATE usuarios
+        SET email_verificado = TRUE, verification_token = NULL, token_expiry = NULL
+        WHERE id = %s
+    """, (u["id"],))
+    flash("¡Email verificado! Ya podés ingresar.", "success")
+    return redirect(url_for("login_view"))
+
 
 @app.get("/logout")
 @login_required
