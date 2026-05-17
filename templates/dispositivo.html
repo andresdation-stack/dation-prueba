@@ -60,25 +60,28 @@
       {% endif %}
     </div>
 
-    <!-- Capacidades -->
+    <!-- Capacidades: solo si el tipo tiene alguna -->
+    {% if d.tiene_gps or d.tiene_caudal or d.tiene_maquina or d.tiene_sensor1 or d.tiene_sensor2 or d.tiene_sensor3 or d.tiene_sensor4 or d.tiene_sensor5 %}
     <div class="detail-card">
       <div class="detail-card-title"><i class="fas fa-sliders-h"></i> Capacidades</div>
+      {% if d.tiene_gps %}
       <div class="kv-row">
         <span class="kv-key">GPS</span>
-        <span class="kv-value">{{ '✓ Sí' if d.tiene_gps else '– No' }}</span>
+        <span class="kv-value">✓ Sí</span>
       </div>
+      {% endif %}
+      {% if d.tiene_caudal %}
       <div class="kv-row">
         <span class="kv-key">Caudal</span>
-        <span class="kv-value">
-          {% if d.tiene_caudal %}✓ Sí{% if d.caudal_factor %} (f={{ d.caudal_factor }}){% endif %}{% else %}– No{% endif %}
-        </span>
+        <span class="kv-value">✓ Sí{% if d.caudal_factor %} (f={{ d.caudal_factor }}){% endif %}</span>
       </div>
+      {% endif %}
+      {% if d.tiene_maquina %}
       <div class="kv-row">
         <span class="kv-key">Máquina</span>
-        <span class="kv-value">
-          {% if d.tiene_maquina %}✓ Sí{% if d.maquina_ancho %} (ancho={{ d.maquina_ancho }}){% endif %}{% else %}– No{% endif %}
-        </span>
+        <span class="kv-value">✓ Sí{% if d.maquina_ancho %} (ancho={{ d.maquina_ancho }}){% endif %}</span>
       </div>
+      {% endif %}
       {% for i in range(1,6) %}
         {% if d['tiene_sensor' ~ i] %}
         <div class="kv-row">
@@ -88,8 +91,10 @@
         {% endif %}
       {% endfor %}
     </div>
+    {% endif %}
 
-    <!-- Nodo -->
+    <!-- Nodo: solo admins -->
+    {% if current_user.is_admin %}
     <div class="detail-card">
       <div class="detail-card-title"><i class="fas fa-microchip"></i> Nodo hardware</div>
       {% if nodo %}
@@ -103,27 +108,55 @@
         <div class="empty-state" style="padding:24px">
           <i class="fas fa-microchip" style="font-size:24px"></i>
           <p style="margin-top:8px;font-size:13px">Sin nodo asignado</p>
-          {% if current_user.is_admin %}
           <a href="{{ url_for('admin_nodos') }}" class="btn btn-secondary" style="margin-top:10px;font-size:12px">Asignar nodo</a>
-          {% endif %}
         </div>
       {% endif %}
     </div>
+    {% endif %}
 
-    <!-- Timbre: acceso para todos los usuarios con permiso -->
+    <!-- Timbre -->
     {% if d.tiene_horarios %}
-    <div class="detail-card">
-      <div class="detail-card-title"><i class="fas fa-bell"></i> Timbre</div>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-        <a href="{{ url_for('timbre_horarios_usuario', device_id=d.id) }}" class="btn btn-primary">
-          <i class="fas fa-clock"></i> Ver horarios
-        </a>
-        {% if current_user.is_admin %}
-        <a href="{{ url_for('admin_timbre', device_id=d.device_id) }}" class="btn btn-secondary">
-          <i class="fas fa-cog"></i> Configuración completa
-        </a>
-        {% endif %}
+    <div class="detail-card" style="grid-column: span 2">
+      <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span><i class="fas fa-bell"></i> Horarios del timbre</span>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn btn-primary" style="font-size:12px" onclick="abrirAgregar()">
+            <i class="fas fa-plus"></i> Agregar
+          </button>
+          {% if current_user.is_admin %}
+          <a href="{{ url_for('admin_timbre', device_id=d.device_id) }}" class="btn btn-secondary" style="font-size:12px">
+            <i class="fas fa-cog"></i> Configurar
+          </a>
+          {% endif %}
+        </div>
       </div>
+
+      <!-- Fila para agregar (oculta) -->
+      <div id="rowAgregar" style="display:none;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;margin-top:10px">
+        <i class="fas fa-clock" style="color:var(--accent);font-size:13px"></i>
+        <form method="POST" action="{{ url_for('dispositivo_add_horario', device_id=d.id) }}" style="display:flex;align-items:center;gap:8px;flex:1">
+          <input type="time" name="hora" id="inputHora" required style="font-size:15px;font-weight:600;width:110px"/>
+          <button type="submit" class="btn btn-primary" style="font-size:12px;padding:4px 12px">Guardar</button>
+          <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="cancelarAgregar()">Cancelar</button>
+        </form>
+      </div>
+
+      <!-- Lista -->
+      {% if horarios %}
+      <div style="margin-top:10px">
+        {% for h in horarios %}
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--border)">
+          <i class="fas fa-bell" style="color:var(--accent);font-size:13px;flex-shrink:0"></i>
+          <span style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">{{ h.hora.strftime('%H:%M') }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:32px;color:var(--text-muted);font-size:13px">
+        <i class="fas fa-bell-slash" style="font-size:28px;opacity:.3;display:block;margin-bottom:10px"></i>
+        Sin horarios configurados todavía.
+      </div>
+      {% endif %}
     </div>
     {% endif %}
 
@@ -144,4 +177,21 @@
 
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function abrirAgregar() {
+    document.getElementById('rowAgregar').style.display = 'flex';
+    document.getElementById('inputHora').focus();
+  }
+  function cancelarAgregar() {
+    document.getElementById('rowAgregar').style.display = 'none';
+    document.getElementById('inputHora').value = '';
+  }
+  const inputHora = document.getElementById('inputHora');
+  if (inputHora) {
+    inputHora.addEventListener('keydown', e => { if (e.key === 'Escape') cancelarAgregar(); });
+  }
+</script>
 {% endblock %}

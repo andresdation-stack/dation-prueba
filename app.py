@@ -498,8 +498,15 @@ def dispositivo_detail(device_id):
         except Exception:
             pass
 
+    horarios = []
+    timbre_cfg = None
+    if d and d.get("tiene_horarios"):
+        timbre_cfg = db_one("SELECT * FROM timbre_config WHERE device_id = %s", (d["device_id"],))
+        horarios = db_get("SELECT * FROM timbre_horarios WHERE device_id = %s ORDER BY hora", (d["device_id"],))
+
     return render_template("dispositivo.html", d=d, hb=hb, nodo=nodo,
-                           online=online, last_data=last_data)
+                           online=online, last_data=last_data,
+                           horarios=horarios, timbre_cfg=timbre_cfg)
 
 
 @app.route("/dispositivo/<int:device_id>/horarios", methods=["GET", "POST"])
@@ -550,6 +557,44 @@ def timbre_horarios_usuario(device_id):
 
     horarios = db_get("SELECT * FROM timbre_horarios WHERE device_id = %s ORDER BY hora", (d["device_id"],))
     return render_template("timbre_usuario.html", d=d, cfg=cfg, horarios=horarios)
+
+@app.post("/dispositivo/<int:device_id>/horario")
+@login_required
+def dispositivo_add_horario(device_id):
+    if current_user.is_admin:
+        d = db_one(f"""
+            SELECT d.*, {_TIPO_COLS}
+            FROM dispositivos d
+            LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
+            WHERE d.id = %s
+        """, (device_id,))
+    else:
+        d = db_one(f"""
+            SELECT d.*, {_TIPO_COLS}
+            FROM dispositivos d
+            LEFT JOIN tipos_dispositivo t ON t.id = d.tipo_id
+            INNER JOIN usuario_dispositivos ud ON ud.dispositivo_id = d.id AND ud.usuario_id = %s
+            WHERE d.id = %s
+        """, (current_user.id, device_id))
+    if not d or not d.get("tiene_horarios"):
+        abort(404)
+    hora = request.form.get("hora", "").strip()
+    if hora:
+        existe = db_one("SELECT id FROM timbre_horarios WHERE device_id = %s AND hora = %s",
+                        (d["device_id"], hora))
+        if existe:
+            flash("Ese horario ya existe.", "error")
+        else:
+            db_run("INSERT INTO timbre_horarios (device_id, hora) VALUES (%s, %s)",
+                   (d["device_id"], hora))
+            db_run("""
+                UPDATE timbre_config
+                SET config_version = config_version + 1, config_acked = FALSE, updated_at = NOW()
+                WHERE device_id = %s
+            """, (d["device_id"],))
+            flash("Horario agregado.", "success")
+    return redirect(url_for("dispositivo_detail", device_id=device_id))
+
 
 # ── API (ESP32) ────────────────────────────────────────────────────────────────
 
