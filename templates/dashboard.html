@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -186,3 +187,61 @@ overlay.addEventListener('click', closeSidebar);
 </script>
 </body>
 </html>
+=======
+{% extends "app_base.html" %}
+{% block title %}Dispositivos – Dation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Dispositivos</div>
+    <div class="page-subtitle">Estado en tiempo real de todos tus dispositivos</div>
+  </div>
+</div>
+
+<div class="page-body">
+  {% if dispositivos %}
+  <div class="cards-grid">
+    {% for d in dispositivos %}
+    <a href="{{ url_for('dispositivo_detail', device_id=d.id) }}" class="device-card">
+      <div class="card-header">
+        <div class="card-icon">
+          <i class="fas {{ d.icon }}"></i>
+        </div>
+        <div class="status-dot {{ 'online' if d.online else 'offline' }}"></div>
+      </div>
+      <div class="card-name">{{ d.nombre }}</div>
+      {% if d.empresa_nombre %}
+      <div class="card-empresa"><i class="fas fa-building"></i> {{ d.empresa_nombre }}</div>
+      {% endif %}
+      <div class="card-meta {{ 'online' if d.online else 'offline' }}">
+        {% if d.online %}
+          <i class="fas fa-circle" style="font-size:8px"></i>
+          En línea
+        {% elif d.ultima_vez %}
+          <i class="fas fa-clock"></i>
+          Último contacto: {{ d.ultima_vez.strftime('%d/%m %H:%M') }}
+        {% else %}
+          <i class="fas fa-unlink"></i>
+          Sin contacto
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="empty-state">
+    <i class="fas fa-microchip"></i>
+    <h3>Sin dispositivos</h3>
+    <p>{% if current_user.is_admin %}Creá dispositivos desde el panel de administración.{% else %}No tenés dispositivos asignados.{% endif %}</p>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('admin_dispositivos') }}" class="btn btn-primary" style="margin-top:16px">
+      <i class="fas fa-plus"></i> Agregar dispositivo
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+>>>>>>> 45f2e88 (Reestructuración completa: nueva DB, auth, dashboard IoT y panel admin)

@@ -1,0 +1,277 @@
+{% extends "app_base.html" %}
+{% block title %}Usuarios – Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Administración</div>
+    <div class="admin-subnav">
+      <a href="{{ url_for('admin_usuarios') }}" class="subnav-item active"><i class="fas fa-users"></i> Usuarios</a>
+      <a href="{{ url_for('admin_empresas') }}" class="subnav-item"><i class="fas fa-building"></i> Empresas</a>
+      <a href="{{ url_for('admin_nodos') }}" class="subnav-item"><i class="fas fa-microchip"></i> Nodos</a>
+      <a href="{{ url_for('admin_dispositivos') }}" class="subnav-item"><i class="fas fa-th-large"></i> Dispositivos</a>
+      <a href="{{ url_for('admin_estados') }}" class="subnav-item"><i class="fas fa-circle"></i> Estados</a>
+      <a href="{{ url_for('admin_configuraciones') }}" class="subnav-item"><i class="fas fa-sliders-h"></i> Configuraciones</a>
+    </div>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('modalCrear')">
+    <i class="fas fa-plus"></i> Nuevo usuario
+  </button>
+</div>
+
+<div class="page-body">
+  <div class="table-container">
+    <div class="table-toolbar">
+      <input type="text" class="search-input" id="searchInput" placeholder="Buscar usuario..."/>
+      <span style="font-size:13px;color:var(--text-muted)">{{ usuarios|length }} usuarios</span>
+    </div>
+    <table id="tablaUsuarios">
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Nombre</th>
+          <th>Email</th>
+          <th>Empresa</th>
+          <th>Rol</th>
+          <th style="width:100px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td><strong>{{ u.username }}</strong></td>
+          <td>
+            {% if not u.nombre and not u.apellido %}
+              <span style="color:var(--warning);font-size:12px"><i class="fas fa-exclamation-triangle"></i> Incompleto</span>
+            {% else %}
+              {{ u.nombre }} {{ u.apellido }}
+            {% endif %}
+          </td>
+          <td class="td-muted">{{ u.email or '–' }}</td>
+          <td class="td-muted">{{ u.empresa_nombre or '–' }}</td>
+          <td>
+            <span class="badge {{ 'badge-admin' if u.is_admin else 'badge-user' }}">
+              {{ 'Admin' if u.is_admin else 'Usuario' }}
+            </span>
+          </td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <button class="btn-icon" title="Editar" onclick="editarUsuario({{ u|tojson }})">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button class="btn-icon danger" title="Eliminar" onclick="eliminarUsuario({{ u.id }}, '{{ u.username }}')">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Crear -->
+<div class="modal-backdrop" id="modalCrear">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Nuevo usuario</span>
+      <button class="modal-close" onclick="closeModal('modalCrear')"><i class="fas fa-times"></i></button>
+    </div>
+    <form method="POST">
+      <input type="hidden" name="action" value="crear"/>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Usuario *</label>
+            <input type="text" name="username" required/>
+          </div>
+          <div class="form-group">
+            <label>Contraseña *</label>
+            <input type="password" name="password" required/>
+          </div>
+          <div class="form-group">
+            <label>Nombre</label>
+            <input type="text" name="nombre"/>
+          </div>
+          <div class="form-group">
+            <label>Apellido</label>
+            <input type="text" name="apellido"/>
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email"/>
+          </div>
+          <div class="form-group">
+            <label>Teléfono</label>
+            <input type="tel" name="telefono"/>
+          </div>
+          <div class="form-group">
+            <label>Empresa</label>
+            <select name="empresa_id">
+              <option value="">Sin empresa</option>
+              {% for e in empresas %}
+              <option value="{{ e.id }}">{{ e.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Zona horaria</label>
+            <select name="zona_horaria">
+              <option value="America/Argentina/Buenos_Aires">UTC-3 (Argentina)</option>
+              <option value="America/Montevideo">UTC-3 (Uruguay)</option>
+              <option value="America/Santiago">UTC-4 (Chile)</option>
+              <option value="America/Bogota">UTC-5 (Colombia)</option>
+              <option value="UTC">UTC</option>
+            </select>
+          </div>
+          <div class="form-group span-2">
+            <label>Comentarios</label>
+            <textarea name="comentarios"></textarea>
+          </div>
+          <div class="form-group span-2">
+            <div class="form-check">
+              <input type="checkbox" id="c_is_admin" name="is_admin"/>
+              <label for="c_is_admin">Es administrador</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modalCrear')">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Editar -->
+<div class="modal-backdrop" id="modalEditar">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Editar usuario</span>
+      <button class="modal-close" onclick="closeModal('modalEditar')"><i class="fas fa-times"></i></button>
+    </div>
+    <form method="POST">
+      <input type="hidden" name="action" value="editar"/>
+      <input type="hidden" name="id" id="e_id"/>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group span-2">
+            <label>Usuario</label>
+            <input type="text" id="e_username" disabled style="opacity:.5"/>
+          </div>
+          <div class="form-group span-2">
+            <label>Nueva contraseña <span style="font-weight:400;color:var(--text-muted)">(dejar vacío para no cambiar)</span></label>
+            <input type="password" name="password" placeholder="••••••••"/>
+          </div>
+          <div class="form-group">
+            <label>Nombre</label>
+            <input type="text" name="nombre" id="e_nombre"/>
+          </div>
+          <div class="form-group">
+            <label>Apellido</label>
+            <input type="text" name="apellido" id="e_apellido"/>
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" id="e_email"/>
+          </div>
+          <div class="form-group">
+            <label>Teléfono</label>
+            <input type="tel" name="telefono" id="e_telefono"/>
+          </div>
+          <div class="form-group">
+            <label>Empresa</label>
+            <select name="empresa_id" id="e_empresa_id">
+              <option value="">Sin empresa</option>
+              {% for e in empresas %}
+              <option value="{{ e.id }}">{{ e.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Zona horaria</label>
+            <select name="zona_horaria" id="e_zona_horaria">
+              <option value="America/Argentina/Buenos_Aires">UTC-3 (Argentina)</option>
+              <option value="America/Montevideo">UTC-3 (Uruguay)</option>
+              <option value="America/Santiago">UTC-4 (Chile)</option>
+              <option value="America/Bogota">UTC-5 (Colombia)</option>
+              <option value="UTC">UTC</option>
+            </select>
+          </div>
+          <div class="form-group span-2">
+            <label>Comentarios</label>
+            <textarea name="comentarios" id="e_comentarios"></textarea>
+          </div>
+          <div class="form-group span-2">
+            <div class="form-check">
+              <input type="checkbox" id="e_is_admin" name="is_admin"/>
+              <label for="e_is_admin">Es administrador</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modalEditar')">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Eliminar -->
+<div class="modal-backdrop" id="modalEliminar">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <span class="modal-title">Eliminar usuario</span>
+      <button class="modal-close" onclick="closeModal('modalEliminar')"><i class="fas fa-times"></i></button>
+    </div>
+    <form method="POST">
+      <input type="hidden" name="action" value="eliminar"/>
+      <input type="hidden" name="id" id="del_id"/>
+      <div class="modal-body">
+        <p style="color:var(--text-muted)">¿Seguro que querés eliminar a <strong id="del_nombre" style="color:var(--text)"></strong>? Esta acción no se puede deshacer.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modalEliminar')">Cancelar</button>
+        <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Eliminar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Búsqueda
+  document.getElementById('searchInput').addEventListener('input', function() {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('#tablaUsuarios tbody tr').forEach(row => {
+      row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+
+  function editarUsuario(u) {
+    document.getElementById('e_id').value = u.id;
+    document.getElementById('e_username').value = u.username;
+    document.getElementById('e_nombre').value = u.nombre || '';
+    document.getElementById('e_apellido').value = u.apellido || '';
+    document.getElementById('e_email').value = u.email || '';
+    document.getElementById('e_telefono').value = u.telefono || '';
+    document.getElementById('e_comentarios').value = u.comentarios || '';
+    document.getElementById('e_is_admin').checked = u.is_admin;
+    const ez = document.getElementById('e_zona_horaria');
+    if (u.zona_horaria) ez.value = u.zona_horaria;
+    const ee = document.getElementById('e_empresa_id');
+    if (u.empresa_id) ee.value = u.empresa_id; else ee.value = '';
+    openModal('modalEditar');
+  }
+
+  function eliminarUsuario(id, nombre) {
+    document.getElementById('del_id').value = id;
+    document.getElementById('del_nombre').textContent = nombre;
+    openModal('modalEliminar');
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,275 @@
+{% extends "app_base.html" %}
+{% block title %}Editar config: {{ config.nombre }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="{{ url_for('admin_configuraciones') }}" style="font-size:13px;color:var(--text-muted)">
+      <i class="fas fa-arrow-left"></i> Configuraciones
+    </a>
+    <div class="page-title" style="margin-top:6px">{{ config.nombre }}</div>
+    <div class="page-subtitle">Editor de estados y condiciones</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button type="button" class="btn btn-secondary" id="btnAgregarEstado">
+      <i class="fas fa-plus"></i> Agregar estado
+    </button>
+    <button type="submit" form="formConfig" class="btn btn-primary">
+      <i class="fas fa-save"></i> Guardar
+    </button>
+  </div>
+</div>
+
+<div class="page-body">
+  <form method="POST" id="formConfig">
+    <!-- Nombre de la config -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
+      <label style="white-space:nowrap;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Nombre</label>
+      <input type="text" name="nombre" value="{{ config.nombre }}" style="max-width:360px"/>
+    </div>
+
+    <!-- Aviso duplicados -->
+    <div id="alertaDuplicados" style="display:none;background:#451a03;border:1px solid #92400e;color:#fcd34d;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:13px">
+      <i class="fas fa-exclamation-triangle"></i> Dos o más estados tienen condiciones idénticas.
+    </div>
+
+    <!-- Lista de estados de la configuración -->
+    <div id="estadosList">
+      {% for ce in config_estados %}
+      <div class="config-estado-row" data-idx="{{ loop.index0 }}">
+        <div class="config-estado-header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:{{ ce.color }};flex-shrink:0"></span>
+            <select name="estado_id" class="estado-selector" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:14px" onchange="checkDuplicados()">
+              {% for e in estados_disponibles %}
+              <option value="{{ e.id }}" {% if e.id == ce.estado_id %}selected{% endif %}
+                      style="background:var(--surface2)">{{ e.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="button" class="btn-icon danger" onclick="eliminarFila(this)" title="Quitar estado">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
+        <!-- Banderas -->
+        <div class="form-section">Banderas del ESP32</div>
+        <div class="banderas-row">
+          {% for b in range(1,9) %}
+          <div class="bandera-check">
+            <input type="checkbox" name="b{{ b }}_{{ loop.index0 }}"
+                   {% if ce['bandera'~b] %}checked{% endif %}
+                   onchange="checkDuplicados()"/>
+            <span>B{{ b }}</span>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Velocidad -->
+        <div class="form-section">Condiciones</div>
+        <div class="condicion-row">
+          <div class="form-check">
+            <input type="checkbox" id="vel_{{ loop.index0 }}" name="vel_activa_{{ loop.index0 }}"
+                   {% if ce.velocidad_activa %}checked{% endif %}
+                   onchange="toggleCondicion(this, 'vel_range_{{ loop.index0 }}'); checkDuplicados()"/>
+            <label for="vel_{{ loop.index0 }}">Velocidad</label>
+          </div>
+          <div id="vel_range_{{ loop.index0 }}" style="display:{% if ce.velocidad_activa %}flex{% else %}none{% endif %};gap:8px;align-items:center">
+            <input type="number" step="any" name="vel_min_{{ loop.index0 }}" placeholder="Mín" value="{{ ce.velocidad_min or '' }}" onchange="checkDuplicados()"/>
+            <span style="color:var(--text-muted)">–</span>
+            <input type="number" step="any" name="vel_max_{{ loop.index0 }}" placeholder="Máx" value="{{ ce.velocidad_max or '' }}" onchange="checkDuplicados()"/>
+          </div>
+        </div>
+
+        {% for si in range(1,4) %}
+        <div class="condicion-row">
+          <div class="form-check">
+            <input type="checkbox" id="s{{ si }}_{{ loop.index0 }}" name="s{{ si }}_activa_{{ loop.index0 }}"
+                   {% if ce['sensor'~si~'_activa'] %}checked{% endif %}
+                   onchange="toggleCondicion(this, 's{{ si }}_range_{{ loop.index0 }}'); checkDuplicados()"/>
+            <label for="s{{ si }}_{{ loop.index0 }}">Sensor {{ si }}</label>
+          </div>
+          <div id="s{{ si }}_range_{{ loop.index0 }}" style="display:{% if ce['sensor'~si~'_activa'] %}flex{% else %}none{% endif %};gap:8px;align-items:center">
+            <input type="number" step="any" name="s{{ si }}_min_{{ loop.index0 }}" placeholder="Mín" value="{{ ce['sensor'~si~'_min'] or '' }}" onchange="checkDuplicados()"/>
+            <span style="color:var(--text-muted)">–</span>
+            <input type="number" step="any" name="s{{ si }}_max_{{ loop.index0 }}" placeholder="Máx" value="{{ ce['sensor'~si~'_max'] or '' }}" onchange="checkDuplicados()"/>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <div id="emptyMsg" style="{% if config_estados %}display:none{% endif %}text-align:center;padding:40px;color:var(--text-muted);font-size:14px">
+      <i class="fas fa-plus-circle" style="font-size:32px;margin-bottom:12px;display:block;opacity:.3"></i>
+      Usá "Agregar estado" para construir la configuración.
+    </div>
+  </form>
+</div>
+
+<!-- Template de fila (oculto, clonado por JS) -->
+<template id="filaTemplate">
+  <div class="config-estado-row">
+    <div class="config-estado-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="estado-color-dot" style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#3498db;flex-shrink:0"></span>
+        <select name="estado_id" class="estado-selector" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:14px" onchange="updateColor(this); checkDuplicados()">
+          {% for e in estados_disponibles %}
+          <option value="{{ e.id }}" data-color="{{ e.color }}" style="background:var(--surface2)">{{ e.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="button" class="btn-icon danger" onclick="eliminarFila(this)">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="form-section">Banderas del ESP32</div>
+    <div class="banderas-row">
+      {% for b in range(1,9) %}
+      <div class="bandera-check">
+        <input type="checkbox" class="bandera-input" data-b="{{ b }}" onchange="checkDuplicados()"/>
+        <span>B{{ b }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="form-section">Condiciones</div>
+    <div class="condicion-row">
+      <div class="form-check">
+        <input type="checkbox" class="vel-check" onchange="toggleCondicion(this, null, 'vel'); checkDuplicados()"/>
+        <label>Velocidad</label>
+      </div>
+      <div class="vel-range" style="display:none;gap:8px;align-items:center">
+        <input type="number" step="any" class="vel-min" placeholder="Mín" onchange="checkDuplicados()"/>
+        <span style="color:var(--text-muted)">–</span>
+        <input type="number" step="any" class="vel-max" placeholder="Máx" onchange="checkDuplicados()"/>
+      </div>
+    </div>
+
+    {% for si in range(1,4) %}
+    <div class="condicion-row">
+      <div class="form-check">
+        <input type="checkbox" class="s{{ si }}-check" onchange="toggleCondicion(this, null, 's{{ si }}'); checkDuplicados()"/>
+        <label>Sensor {{ si }}</label>
+      </div>
+      <div class="s{{ si }}-range" style="display:none;gap:8px;align-items:center">
+        <input type="number" step="any" class="s{{ si }}-min" placeholder="Mín" onchange="checkDuplicados()"/>
+        <span style="color:var(--text-muted)">–</span>
+        <input type="number" step="any" class="s{{ si }}-max" placeholder="Máx" onchange="checkDuplicados()"/>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const estadoColores = {
+    {% for e in estados_disponibles %}
+    "{{ e.id }}": "{{ e.color }}",
+    {% endfor %}
+  };
+
+  let rowCount = {{ config_estados|length }};
+
+  document.getElementById('btnAgregarEstado').addEventListener('click', agregarEstado);
+
+  function agregarEstado() {
+    if (rowCount >= 20) { alert('Máximo 20 estados por configuración.'); return; }
+    const tpl = document.getElementById('filaTemplate');
+    const clone = tpl.content.cloneNode(true);
+    const row = clone.querySelector('.config-estado-row');
+    const idx = rowCount++;
+
+    // Asignar nombres a los inputs con el índice correcto
+    row.querySelector('.estado-selector').name = 'estado_id';
+
+    row.querySelectorAll('.bandera-input').forEach(cb => {
+      const b = cb.dataset.b;
+      cb.name = `b${b}_${idx}`;
+    });
+
+    const velCheck = row.querySelector('.vel-check');
+    velCheck.name = `vel_activa_${idx}`;
+    row.querySelector('.vel-min').name = `vel_min_${idx}`;
+    row.querySelector('.vel-max').name = `vel_max_${idx}`;
+    const velRange = row.querySelector('.vel-range');
+    velCheck.onchange = function() { toggleCondicionEl(velCheck, velRange); checkDuplicados(); };
+
+    for (let s = 1; s <= 3; s++) {
+      const sCheck = row.querySelector(`.s${s}-check`);
+      sCheck.name = `s${s}_activa_${idx}`;
+      row.querySelector(`.s${s}-min`).name = `s${s}_min_${idx}`;
+      row.querySelector(`.s${s}-max`).name = `s${s}_max_${idx}`;
+      const sRange = row.querySelector(`.s${s}-range`);
+      sCheck.onchange = (function(c, r) { return function() { toggleCondicionEl(c, r); checkDuplicados(); }; })(sCheck, sRange);
+    }
+
+    // Color inicial
+    const sel = row.querySelector('.estado-selector');
+    const dot = row.querySelector('.estado-color-dot');
+    sel.addEventListener('change', function() {
+      if (dot) dot.style.background = estadoColores[this.value] || '#3498db';
+      checkDuplicados();
+    });
+
+    document.getElementById('estadosList').appendChild(row);
+    document.getElementById('emptyMsg').style.display = 'none';
+    checkDuplicados();
+  }
+
+  function eliminarFila(btn) {
+    btn.closest('.config-estado-row').remove();
+    if (!document.querySelectorAll('.config-estado-row').length) {
+      document.getElementById('emptyMsg').style.display = '';
+    }
+    checkDuplicados();
+  }
+
+  function toggleCondicion(cb, rangeId, cls) {
+    if (rangeId) {
+      const el = document.getElementById(rangeId);
+      if (el) el.style.display = cb.checked ? 'flex' : 'none';
+    }
+  }
+
+  function toggleCondicionEl(cb, rangeEl) {
+    if (rangeEl) rangeEl.style.display = cb.checked ? 'flex' : 'none';
+  }
+
+  function updateColor(sel) {
+    const dot = sel.closest('.config-estado-header').querySelector('.estado-color-dot');
+    if (dot) dot.style.background = estadoColores[sel.value] || '#3498db';
+  }
+
+  function condicionKey(row) {
+    const banderas = [...row.querySelectorAll('input[type="checkbox"][name^="b"]')]
+      .map(cb => cb.checked ? '1' : '0').join('');
+    const vel = row.querySelector('input[name^="vel_activa"]');
+    const velMin = row.querySelector('input[name^="vel_min"]');
+    const velMax = row.querySelector('input[name^="vel_max"]');
+    let key = banderas;
+    if (vel && vel.checked) key += `|vel:${velMin?.value||''}:${velMax?.value||''}`;
+    for (let s = 1; s <= 3; s++) {
+      const sc = row.querySelector(`input[name^="s${s}_activa"]`);
+      if (sc && sc.checked) {
+        key += `|s${s}:${row.querySelector(`input[name^="s${s}_min"]`)?.value||''}:${row.querySelector(`input[name^="s${s}_max"]`)?.value||''}`;
+      }
+    }
+    return key;
+  }
+
+  function checkDuplicados() {
+    const rows = [...document.querySelectorAll('.config-estado-row')];
+    const keys = rows.map(condicionKey);
+    const hasDup = keys.some((k, i) => keys.indexOf(k) !== i);
+    document.getElementById('alertaDuplicados').style.display = hasDup ? '' : 'none';
+    rows.forEach((row, i) => {
+      const isDup = keys.indexOf(keys[i]) !== i || keys.lastIndexOf(keys[i]) !== i;
+      row.style.borderColor = isDup ? 'var(--warning)' : '';
+    });
+  }
+</script>
+{% endblock %}
