@@ -61,7 +61,7 @@ def send_verification_email(to_email, username, token):
     # ── Resend API (preferido en Railway) ─────────────────────────────────────
     if RESEND_API_KEY:
         try:
-            _email = SMTP_FROM if "@" in (SMTP_FROM or "") else (SMTP_USER or "noreply@dation.com.ar")
+            _email = next((x for x in [SMTP_FROM, SMTP_USER] if x and "@" in x), "noreply@dation.com.ar")
             from_addr = f"Dation <{_email}>"
             payload = json.dumps({
                 "from": from_addr,
