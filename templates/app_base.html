@@ -27,12 +27,6 @@
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
 <div class="app-layout">
-  <!-- Topbar mobile -->
-  <div class="mobile-topbar">
-    <button class="hamburger" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
-    <span class="mobile-topbar-title">Dation</span>
-  </div>
-
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
@@ -87,6 +81,10 @@
 
   <!-- Main content -->
   <main class="main-content">
+    <div class="mobile-topbar">
+      <button class="hamburger" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <span class="mobile-topbar-title">Dation</span>
+    </div>
     {% block content %}{% endblock %}
   </main>
 </div>
