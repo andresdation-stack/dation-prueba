@@ -1105,7 +1105,10 @@ def admin_test_email():
                 results.append(f"Resend OK (status {resp.status}): {body}")
         except urllib.error.HTTPError as e:
             body = e.read().decode()
+            server = e.headers.get("server", "?")
+            cf_ray = e.headers.get("cf-ray", "")
             results.append(f"Resend ERROR {e.code}: {body}")
+            results.append(f"Server: {server} | CF-Ray: {cf_ray}")
         except Exception as e:
             results.append(f"Resend ERROR: {type(e).__name__}: {e}")
     else:
