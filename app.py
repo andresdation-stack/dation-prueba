@@ -4,6 +4,7 @@ import uuid
 import secrets
 import smtplib
 import ssl
+import urllib.request
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -24,30 +25,18 @@ app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 API_KEY = os.environ.get("API_KEY", "andres-123")
 
-SMTP_HOST = os.environ.get("SMTP_HOST", "")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASS = os.environ.get("SMTP_PASS", "")
-SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER)
-APP_URL   = os.environ.get("APP_URL", "http://localhost:5000")
+SMTP_HOST    = os.environ.get("SMTP_HOST", "")
+SMTP_PORT    = int(os.environ.get("SMTP_PORT", 587))
+SMTP_USER    = os.environ.get("SMTP_USER", "")
+SMTP_PASS    = os.environ.get("SMTP_PASS", "")
+SMTP_FROM    = os.environ.get("SMTP_FROM", SMTP_USER)
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+APP_URL      = os.environ.get("APP_URL", "http://localhost:5000")
 
 # ── Email ──────────────────────────────────────────────────────────────────────
 
-def send_verification_email(to_email, username, token):
-    if not SMTP_HOST or not SMTP_USER:
-        app.logger.warning("SMTP not configured — skipping verification email")
-        return False
-    verify_url = f"{APP_URL}/verificar/{token}"
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Verificá tu cuenta – Dation"
-    msg["From"]    = SMTP_FROM
-    msg["To"]      = to_email
-    text = (
-        f"Hola {username},\n\n"
-        f"Verificá tu cuenta haciendo clic en el siguiente enlace:\n{verify_url}\n\n"
-        "Este enlace expira en 24 horas.\n\nEquipo Dation"
-    )
-    html = f"""
+def _email_html(username, verify_url):
+    return f"""
     <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#111;border-radius:12px">
       <div style="font-size:22px;font-weight:700;color:#f97316;margin-bottom:8px">Dation</div>
       <div style="font-size:16px;font-weight:600;color:#f4f4f5;margin-bottom:16px">Verificá tu cuenta</div>
@@ -61,6 +50,48 @@ def send_verification_email(to_email, username, token):
       <p style="color:#52525b;font-size:12px">Este enlace expira en 24 horas.<br>
       Si no te registraste, ignorá este mensaje.</p>
     </div>"""
+
+
+def send_verification_email(to_email, username, token):
+    verify_url = f"{APP_URL}/verificar/{token}"
+    subject    = "Verificá tu cuenta – Dation"
+    html       = _email_html(username, verify_url)
+    text       = f"Hola {username},\n\nVerificá tu cuenta:\n{verify_url}\n\nExpira en 24 hs.\n\nDation"
+
+    # ── Resend API (preferido en Railway) ─────────────────────────────────────
+    if RESEND_API_KEY:
+        try:
+            from_addr = SMTP_FROM or f"Dation <onboarding@resend.dev>"
+            payload = json.dumps({
+                "from": from_addr,
+                "to": [to_email],
+                "subject": subject,
+                "html": html,
+                "text": text,
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=payload,
+                headers={
+                    "Authorization": f"Bearer {RESEND_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.status in (200, 201)
+        except Exception as e:
+            app.logger.error(f"Resend error: {e}")
+            return False
+
+    # ── SMTP fallback ──────────────────────────────────────────────────────────
+    if not SMTP_HOST or not SMTP_USER:
+        app.logger.warning("No email provider configured")
+        return False
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"]    = SMTP_FROM
+    msg["To"]      = to_email
     msg.attach(MIMEText(text, "plain"))
     msg.attach(MIMEText(html, "html"))
     try:
@@ -77,7 +108,7 @@ def send_verification_email(to_email, username, token):
                 srv.sendmail(SMTP_FROM, to_email, msg.as_string())
         return True
     except Exception as e:
-        app.logger.error(f"Email send error: {e}")
+        app.logger.error(f"SMTP error: {e}")
         return False
 
 # ── DB helpers ─────────────────────────────────────────────────────────────────
@@ -1035,6 +1066,7 @@ def admin_index():
 def admin_test_email():
     import ssl
     results = []
+    results.append(f"RESEND_API_KEY: {'configurado' if RESEND_API_KEY else 'NO configurado'}")
     results.append(f"SMTP_HOST: '{SMTP_HOST}'")
     results.append(f"SMTP_PORT: {SMTP_PORT}")
     results.append(f"SMTP_USER: '{SMTP_USER}'")
