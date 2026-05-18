@@ -134,7 +134,23 @@
     {% if d.tiene_horarios %}
     <div class="detail-card" style="grid-column: span 2">
       <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center">
-        <span><i class="fas fa-bell"></i> Horarios del timbre</span>
+        <span>
+          <i class="fas fa-bell"></i> Horarios del timbre
+          {% if timbre_cfg %}
+            {% if not timbre_cfg.config_acked %}
+            <span title="Config pendiente de confirmación por el dispositivo"
+                  style="margin-left:8px;font-size:12px;animation:parpadeo 1s infinite;display:inline-block">
+              <i class="fas fa-cog" style="color:#ef4444"></i>
+              <span style="color:#ef4444;font-size:11px;font-weight:500">Pendiente</span>
+            </span>
+            {% else %}
+            <span title="Config aplicada por el dispositivo" style="margin-left:8px;font-size:12px">
+              <i class="fas fa-cog" style="color:#4ade80"></i>
+              <span style="color:#4ade80;font-size:11px;font-weight:500">Aplicada</span>
+            </span>
+            {% endif %}
+          {% endif %}
+        </span>
         <div style="display:flex;gap:8px">
           {% if timbre_cfg and timbre_cfg.pausado %}
           <form method="POST" action="{{ url_for('dispositivo_timbre_reanudar', device_id=d.id) }}" style="display:inline">
