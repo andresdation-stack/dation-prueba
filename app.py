@@ -1108,6 +1108,15 @@ def device_config_ack(device_id):
     key = data.get("api_key") or request.headers.get("X-API-Key", "")
     if key != API_KEY:
         return jsonify({"error": "unauthorized"}), 401
+    # Resolver IMEI → device_id
+    if not device_id.startswith("D") and len(device_id) >= 10:
+        nodo = db_one("""
+            SELECT d.device_id FROM nodos n
+            JOIN dispositivos d ON d.id = n.dispositivo_id
+            WHERE n.imei = %s
+        """, (device_id,))
+        if nodo:
+            device_id = nodo["device_id"]
     db_run("""
         UPDATE timbre_config SET config_acked = TRUE, config_acked_at = NOW()
         WHERE device_id = %s
