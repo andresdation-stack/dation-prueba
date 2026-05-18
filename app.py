@@ -387,6 +387,7 @@ def init_db():
                     device_id VARCHAR(80) PRIMARY KEY REFERENCES dispositivos(device_id) ON DELETE CASCADE,
                     duracion_seg INTEGER NOT NULL DEFAULT 3,
                     dias_semana INTEGER[] NOT NULL DEFAULT '{1,2,3,4,5}',
+                    heartbeat_interval_seg INTEGER NOT NULL DEFAULT 30,
                     config_version INTEGER NOT NULL DEFAULT 1,
                     config_acked BOOLEAN DEFAULT FALSE,
                     config_acked_at TIMESTAMP,
@@ -442,6 +443,7 @@ def init_db():
             cur.execute("ALTER TABLE timbre_config ADD COLUMN IF NOT EXISTS pausado BOOLEAN DEFAULT FALSE")
             cur.execute("ALTER TABLE timbre_config ADD COLUMN IF NOT EXISTS pausado_hasta TIMESTAMP")
             cur.execute("ALTER TABLE timbre_horarios ADD COLUMN IF NOT EXISTS dias_semana INTEGER[] DEFAULT '{1,2,3,4,5}'")
+            cur.execute("ALTER TABLE timbre_config ADD COLUMN IF NOT EXISTS heartbeat_interval_seg INTEGER NOT NULL DEFAULT 30")
             cur.execute("ALTER TABLE timbre_horarios ADD COLUMN IF NOT EXISTS duracion_seg INTEGER DEFAULT 3")
             cur.execute("""
                 ALTER TABLE dispositivos
@@ -617,18 +619,22 @@ def logout():
 def dashboard():
     if current_user.is_admin:
         rows = db_get("""
-            SELECT d.*, e.nombre AS empresa_nombre, hb.last_seen, hb.last_data
+            SELECT d.*, e.nombre AS empresa_nombre, hb.last_seen, hb.last_data,
+                   tc.config_acked, tc.updated_at AS config_updated_at
             FROM dispositivos d
             LEFT JOIN empresas e ON e.id = d.empresa_id
             LEFT JOIN device_heartbeats hb ON hb.device_id = d.device_id
+            LEFT JOIN timbre_config tc ON tc.device_id = d.device_id
             ORDER BY d.nombre
         """)
     else:
         rows = db_get("""
-            SELECT d.*, e.nombre AS empresa_nombre, hb.last_seen, hb.last_data
+            SELECT d.*, e.nombre AS empresa_nombre, hb.last_seen, hb.last_data,
+                   tc.config_acked, tc.updated_at AS config_updated_at
             FROM dispositivos d
             LEFT JOIN empresas e ON e.id = d.empresa_id
             LEFT JOIN device_heartbeats hb ON hb.device_id = d.device_id
+            LEFT JOIN timbre_config tc ON tc.device_id = d.device_id
             INNER JOIN usuario_dispositivos ud
                 ON ud.dispositivo_id = d.id AND ud.usuario_id = %s
             ORDER BY d.nombre
@@ -659,6 +665,8 @@ def dashboard():
             except Exception:
                 pass
         d["estado_actual"] = estado_actual
+        # config_pending: tiene timbre_config y no fue confirmada
+        d["config_pending"] = (d.get("config_acked") is False)
 
         dispositivos.append(d)
 
@@ -1077,6 +1085,7 @@ def device_config_get(device_id):
             pausado = False
         config["timbre"] = {
             "version": tc["config_version"],
+            "heartbeat_interval_seg": tc.get("heartbeat_interval_seg") or 30,
             "pausado": pausado,
             "pausado_hasta": pausado_hasta.isoformat() if pausado_hasta and pausado else None,
             "horarios": [

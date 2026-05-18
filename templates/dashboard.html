@@ -35,6 +35,15 @@
        data-search="{{ d.nombre|lower }} {{ (d.empresa_nombre or '')|lower }} {{ e_nombre|lower }}">
       <div style="position:relative;margin-bottom:14px">
         <div class="status-dot {{ 'online' if d.online else 'offline' }}" style="position:absolute;top:0;right:0"></div>
+        {% if d.config_pending %}
+        <div title="Config pendiente de confirmación" style="position:absolute;top:0;left:0;font-size:12px;animation:parpadeo 1s infinite">
+          <i class="fas fa-cog" style="color:#ef4444"></i>
+        </div>
+        {% elif d.config_acked %}
+        <div title="Config aplicada por el dispositivo" style="position:absolute;top:0;left:0;font-size:12px">
+          <i class="fas fa-cog" style="color:#4ade80"></i>
+        </div>
+        {% endif %}
         <div class="card-icon" style="color:{{ e_color }};margin:0 auto">
           <i class="fas {{ d.icon }}"></i>
         </div>

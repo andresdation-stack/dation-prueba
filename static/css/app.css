@@ -531,6 +531,11 @@ tbody td {
   to   { transform: scale(1);    opacity: 1; }
 }
 
+@keyframes parpadeo {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+
 .modal-header {
   display: flex;
   align-items: center;
