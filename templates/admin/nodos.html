@@ -116,6 +116,10 @@
       {% endfor %}
     </select>
   </div>
+  <div class="form-group">
+    <label>Heartbeat (seg)</label>
+    <input type="number" name="heartbeat_interval_seg" id="{{ prefix }}_heartbeat" min="5" max="3600" value="30"/>
+  </div>
 </div>
 <div class="form-section">SIMs (máx. 2)</div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -219,6 +223,7 @@
     setVal('e_remito', n.remito_instalacion);
     setVal('e_empresa_id', n.empresa_id);
     setVal('e_dispositivo_id', n.dispositivo_id);
+    setVal('e_heartbeat', n.heartbeat_interval_seg || 30);
     for (let i = 0; i < 2; i++) {
       setVal(`e_sim_comp_${i}`, sims[i] ? sims[i].compania : '');
       setVal(`e_sim_imei_${i}`, sims[i] ? sims[i].imei_sim : '');

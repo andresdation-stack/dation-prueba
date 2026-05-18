@@ -444,6 +444,7 @@ def init_db():
             cur.execute("ALTER TABLE timbre_config ADD COLUMN IF NOT EXISTS pausado_hasta TIMESTAMP")
             cur.execute("ALTER TABLE timbre_horarios ADD COLUMN IF NOT EXISTS dias_semana INTEGER[] DEFAULT '{1,2,3,4,5}'")
             cur.execute("ALTER TABLE timbre_config ADD COLUMN IF NOT EXISTS heartbeat_interval_seg INTEGER NOT NULL DEFAULT 30")
+            cur.execute("ALTER TABLE nodos ADD COLUMN IF NOT EXISTS heartbeat_interval_seg INTEGER NOT NULL DEFAULT 30")
             cur.execute("ALTER TABLE timbre_horarios ADD COLUMN IF NOT EXISTS duracion_seg INTEGER DEFAULT 3")
             cur.execute("""
                 ALTER TABLE dispositivos
@@ -1083,9 +1084,11 @@ def device_config_get(device_id):
         pausado_hasta = tc.get("pausado_hasta")
         if pausado and pausado_hasta and pausado_hasta < now_utc:
             pausado = False
+        nodo_cfg = db_one("SELECT heartbeat_interval_seg FROM nodos WHERE dispositivo_id = (SELECT id FROM dispositivos WHERE device_id = %s)", (device_id,))
+        hb_interval = (nodo_cfg["heartbeat_interval_seg"] if nodo_cfg else None) or tc.get("heartbeat_interval_seg") or 30
         config["timbre"] = {
             "version": tc["config_version"],
-            "heartbeat_interval_seg": tc.get("heartbeat_interval_seg") or 30,
+            "heartbeat_interval_seg": hb_interval,
             "pausado": pausado,
             "pausado_hasta": pausado_hasta.isoformat() if pausado_hasta and pausado else None,
             "horarios": [
@@ -1422,8 +1425,9 @@ def admin_nodos():
                 try:
                     row = db_run_returning("""
                         INSERT INTO nodos (imei, marca, modelo, firmware, fecha_compra,
-                            fecha_instalacion, remito_instalacion, empresa_id, dispositivo_id)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                            fecha_instalacion, remito_instalacion, empresa_id, dispositivo_id,
+                            heartbeat_interval_seg)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
                     """, (
                         imei,
                         request.form.get("marca", ""),
@@ -1434,6 +1438,7 @@ def admin_nodos():
                         request.form.get("remito_instalacion", ""),
                         request.form.get("empresa_id") or None,
                         request.form.get("dispositivo_id") or None,
+                        int(request.form.get("heartbeat_interval_seg") or 30),
                     ))
                     nid = row["id"]
                     for i in range(2):
@@ -1450,7 +1455,8 @@ def admin_nodos():
             nid = request.form.get("id")
             db_run("""
                 UPDATE nodos SET imei=%s, marca=%s, modelo=%s, firmware=%s, fecha_compra=%s,
-                    fecha_instalacion=%s, remito_instalacion=%s, empresa_id=%s, dispositivo_id=%s
+                    fecha_instalacion=%s, remito_instalacion=%s, empresa_id=%s, dispositivo_id=%s,
+                    heartbeat_interval_seg=%s
                 WHERE id=%s
             """, (
                 request.form.get("imei", ""),
@@ -1462,6 +1468,7 @@ def admin_nodos():
                 request.form.get("remito_instalacion", ""),
                 request.form.get("empresa_id") or None,
                 request.form.get("dispositivo_id") or None,
+                int(request.form.get("heartbeat_interval_seg") or 30),
                 nid,
             ))
             db_run("DELETE FROM nodo_sims WHERE nodo_id=%s", (nid,))
