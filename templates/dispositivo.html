@@ -42,7 +42,7 @@
       </div>
 
       <!-- Estado compacto -->
-      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;pointer-events:none">
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;pointer-events:none;flex-wrap:wrap">
         {% if hb and minutes_ago is not none and minutes_ago < 30 %}
         <i class="fas fa-circle" style="color:#4ade80;font-size:8px"></i>
         <span style="color:#4ade80;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">
@@ -57,6 +57,12 @@
         {% else %}
         <i class="fas fa-circle" style="color:#f87171;font-size:8px"></i>
         <span style="color:#f87171;font-size:13px">Nunca recibido</span>
+        {% endif %}
+        {% if last_data.get('wifi_ssid') %}
+        <span style="font-size:11px;color:var(--text-muted);margin-left:4px">
+          <i class="fas fa-wifi" style="font-size:10px"></i>
+          Conectado a <strong style="color:var(--text)">{{ last_data.wifi_ssid }}</strong>
+        </span>
         {% endif %}
       </div>
 
