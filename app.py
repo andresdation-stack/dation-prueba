@@ -986,9 +986,23 @@ def ingest():
     data = request.get_json(silent=True) or {}
     if data.get("api_key") != API_KEY:
         return jsonify({"error": "unauthorized"}), 401
+
     device_id = data.get("device_id")
+
+    # Resolución por IMEI del nodo
+    imei = data.get("imei")
+    if imei and not device_id:
+        nodo = db_one("""
+            SELECT n.dispositivo_id, d.device_id
+            FROM nodos n
+            JOIN dispositivos d ON d.id = n.dispositivo_id
+            WHERE n.imei = %s AND n.dispositivo_id IS NOT NULL
+        """, (imei,))
+        if nodo:
+            device_id = nodo["device_id"]
+
     if not device_id:
-        return jsonify({"error": "missing device_id"}), 400
+        return jsonify({"error": "missing device_id or unknown imei"}), 400
     payload = {k: v for k, v in data.items() if k not in ("api_key", "device_id")}
     payload_json = json.dumps(payload) if payload else None
     db_run("""
@@ -1016,6 +1030,15 @@ def device_config_get(device_id):
     key = request.args.get("api_key") or request.headers.get("X-API-Key", "")
     if key != API_KEY:
         return jsonify({"error": "unauthorized"}), 401
+    # Permite buscar por IMEI además de device_id
+    if device_id.isdigit() or len(device_id) >= 14:
+        nodo = db_one("""
+            SELECT d.device_id FROM nodos n
+            JOIN dispositivos d ON d.id = n.dispositivo_id
+            WHERE n.imei = %s
+        """, (device_id,))
+        if nodo:
+            device_id = nodo["device_id"]
     d = db_one(f"""
         SELECT d.*, {_TIPO_COLS}
         FROM dispositivos d
