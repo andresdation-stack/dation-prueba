@@ -1123,6 +1123,17 @@ def device_config_ack(device_id):
     """, (device_id,))
     return jsonify({"ok": True}), 200
 
+
+@app.get("/api/config-status")
+@login_required
+def api_config_status():
+    rows = db_get("""
+        SELECT d.device_id, tc.config_acked
+        FROM dispositivos d
+        JOIN timbre_config tc ON tc.device_id = d.device_id
+    """)
+    return jsonify({r["device_id"]: r["config_acked"] for r in (rows or [])})
+
 # ── Admin: redirect ────────────────────────────────────────────────────────────
 
 @app.get("/admin")

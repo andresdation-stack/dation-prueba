@@ -32,7 +32,8 @@
     {% set e_color = d.estado_actual.color if d.estado_actual else '#ef4444' %}
     {% set e_nombre = d.estado_actual.nombre if d.estado_actual else 'Sin estado actual' %}
     <a href="{{ url_for('dispositivo_detail', device_id=d.id) }}" class="device-card"
-       data-search="{{ d.nombre|lower }} {{ (d.empresa_nombre or '')|lower }} {{ e_nombre|lower }}">
+       data-search="{{ d.nombre|lower }} {{ (d.empresa_nombre or '')|lower }} {{ e_nombre|lower }}"
+       data-device-id="{{ d.device_id }}">
       <div style="position:relative;margin-bottom:14px">
         <div class="status-dot {{ 'online' if d.online else 'offline' }}" style="position:absolute;top:0;right:0"></div>
         {% if d.config_pending %}
@@ -154,5 +155,34 @@
   }
 
   setView(localStorage.getItem('dash-view') || 'grid');
+
+  // Auto-refresh del estado de config cada 15 segundos
+  setInterval(async () => {
+    try {
+      const res = await fetch('/api/config-status');
+      const status = await res.json();
+      document.querySelectorAll('.device-card[data-device-id]').forEach(card => {
+        const did = card.dataset.deviceId;
+        if (!(did in status)) return;
+        const acked = status[did];
+        let icon = card.querySelector('.config-status-icon');
+        if (!icon) {
+          icon = card.querySelector('[title="Config pendiente de confirmación"], [title="Config aplicada por el dispositivo"]');
+        }
+        if (!icon) return;
+        if (acked) {
+          icon.title = 'Config aplicada por el dispositivo';
+          icon.style.animation = '';
+          icon.querySelector('i').style.color = '#4ade80';
+          icon.querySelector('span') && (icon.querySelector('span').style.color = '#4ade80');
+        } else {
+          icon.title = 'Config pendiente de confirmación';
+          icon.style.animation = 'parpadeo 1s infinite';
+          icon.querySelector('i').style.color = '#ef4444';
+          icon.querySelector('span') && (icon.querySelector('span').style.color = '#ef4444');
+        }
+      });
+    } catch(e) {}
+  }, 15000);
 </script>
 {% endblock %}
