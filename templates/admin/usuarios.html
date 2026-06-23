@@ -14,9 +14,14 @@
       <a href="{{ url_for('admin_configuraciones') }}" class="subnav-item"><i class="fas fa-sliders-h"></i> Configuraciones</a>
     </div>
   </div>
-  <button class="btn btn-primary" onclick="openModal('modalCrear')">
-    <i class="fas fa-plus"></i> Nuevo usuario
-  </button>
+  <div style="display:flex;gap:10px">
+    <button class="btn btn-secondary" onclick="openModal('modalLogs')">
+      <i class="fas fa-list"></i> Últimos 30 logins
+    </button>
+    <button class="btn btn-primary" onclick="openModal('modalCrear')">
+      <i class="fas fa-plus"></i> Nuevo usuario
+    </button>
+  </div>
 </div>
 
 <div class="page-body">
@@ -77,6 +82,9 @@
                 <i class="fas fa-th-large"></i>
               </button>
               {% endif %}
+              <a class="btn-icon" title="Historial de logins" href="{{ url_for('admin_usuarios', user_id=u.id) }}">
+                <i class="fas fa-history"></i>
+              </a>
               <button class="btn-icon" title="Editar" onclick='editarUsuario({{ u|tojson }})'>
                 <i class="fas fa-edit"></i>
               </button>
@@ -288,6 +296,59 @@
     </form>
   </div>
 </div>
+
+<!-- Modal Logs de login -->
+<div class="modal-backdrop" id="modalLogs">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">
+        <i class="fas fa-list"></i>
+        {% if filtro_usuario %}
+          Últimos 30 logins de <strong style="color:var(--accent)">{{ filtro_usuario.username }}</strong>
+          <a href="{{ url_for('admin_usuarios') }}" style="font-size:12px;color:var(--text-muted);margin-left:8px">(ver todos)</a>
+        {% else %}
+          Últimos 30 inicios de sesión
+        {% endif %}
+      </span>
+      <button class="modal-close" onclick="closeModal('modalLogs')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      {% if login_logs %}
+      <table>
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Resultado</th>
+            <th>IP</th>
+            <th>Fecha y hora</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in login_logs %}
+          <tr>
+            <td>{{ l.username }}</td>
+            <td>
+              {% if l.exitoso %}
+              <span style="color:#4ade80;font-size:13px"><i class="fas fa-check-circle"></i> Exitoso</span>
+              {% else %}
+              <span style="color:#ef4444;font-size:13px"><i class="fas fa-times-circle"></i> Fallido</span>
+              {% endif %}
+            </td>
+            <td class="td-muted">{{ l.ip or '–' }}</td>
+            <td class="td-muted">{{ l.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:var(--text-muted);text-align:center;padding:20px">Sin registros todavía.</p>
+      {% endif %}
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('modalLogs')">Cerrar</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -377,5 +438,9 @@
 
     openModal('modalPermisos');
   }
+
+  {% if filtro_usuario %}
+  openModal('modalLogs');
+  {% endif %}
 </script>
 {% endblock %}

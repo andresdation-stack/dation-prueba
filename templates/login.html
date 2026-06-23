@@ -20,7 +20,9 @@
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for cat, msg in messages %}
-        <div class="login-error"><i class="fas fa-exclamation-circle"></i> {{ msg }}</div>
+        <div class="login-error" style="{% if cat == 'success' %}background:#14532d;border-color:#166534;color:#bbf7d0{% endif %}">
+          <i class="fas fa-{% if cat == 'success' %}check-circle{% else %}exclamation-circle{% endif %}"></i> {{ msg }}
+        </div>
       {% endfor %}
     {% endwith %}
 

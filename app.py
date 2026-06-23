@@ -376,6 +376,16 @@ def init_db():
                 )
             """)
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS login_logs (
+                    id SERIAL PRIMARY KEY,
+                    usuario_id INTEGER,
+                    username VARCHAR(80),
+                    ip VARCHAR(64),
+                    exitoso BOOLEAN NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS device_heartbeats (
                     device_id VARCHAR(80) PRIMARY KEY,
                     last_seen TIMESTAMP NOT NULL,
@@ -519,15 +529,22 @@ def login_view():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        ip = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
         row = db_one("SELECT * FROM usuarios WHERE username = %s", (username,))
         if row and check_password_hash(row["password_hash"], password):
             if not row.get("email_verificado", True):
                 flash("Verificá tu email antes de ingresar. Revisá tu bandeja de entrada.", "error")
+                db_run("INSERT INTO login_logs (usuario_id, username, ip, exitoso) VALUES (%s,%s,%s,FALSE)",
+                       (row["id"], username, ip))
             else:
                 login_user(User(row))
+                db_run("INSERT INTO login_logs (usuario_id, username, ip, exitoso) VALUES (%s,%s,%s,TRUE)",
+                       (row["id"], username, ip))
                 return redirect(url_for("dashboard"))
         else:
             flash("Usuario o contraseña incorrectos.", "error")
+            db_run("INSERT INTO login_logs (usuario_id, username, ip, exitoso) VALUES (NULL,%s,%s,FALSE)",
+                   (username, ip))
     return render_template("login.html")
 
 @app.route("/registro", methods=["GET", "POST"])
@@ -1332,8 +1349,19 @@ def admin_usuarios():
     except Exception:
         dispositivos = []
         permisos = {}
+    filtro_uid = request.args.get("user_id")
+    if filtro_uid:
+        login_logs = db_get(
+            "SELECT * FROM login_logs WHERE usuario_id = %s ORDER BY created_at DESC LIMIT 30",
+            (filtro_uid,)
+        ) or []
+        filtro_usuario = next((u for u in usuarios if str(u["id"]) == filtro_uid), None)
+    else:
+        login_logs = db_get("SELECT * FROM login_logs ORDER BY created_at DESC LIMIT 30") or []
+        filtro_usuario = None
     return render_template("admin/usuarios.html", usuarios=usuarios, empresas=empresas,
-                           dispositivos=dispositivos, permisos=permisos)
+                           dispositivos=dispositivos, permisos=permisos, login_logs=login_logs,
+                           filtro_usuario=filtro_usuario)
 
 # ── Admin: Empresas ────────────────────────────────────────────────────────────
 
