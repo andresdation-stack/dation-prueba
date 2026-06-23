@@ -53,6 +53,59 @@ def _email_html(username, verify_url):
     </div>"""
 
 
+def parse_user_agent(ua):
+    ua = ua or ""
+    ua_l = ua.lower()
+    if "edg/" in ua_l:
+        navegador = "Edge"
+    elif "opr/" in ua_l or "opera" in ua_l:
+        navegador = "Opera"
+    elif "chrome/" in ua_l and "chromium" not in ua_l:
+        navegador = "Chrome"
+    elif "firefox/" in ua_l:
+        navegador = "Firefox"
+    elif "safari/" in ua_l:
+        navegador = "Safari"
+    else:
+        navegador = "Desconocido"
+
+    if "windows" in ua_l:
+        so = "Windows"
+    elif "android" in ua_l:
+        so = "Android"
+    elif "iphone" in ua_l or "ipad" in ua_l or "ios" in ua_l:
+        so = "iOS"
+    elif "mac os" in ua_l:
+        so = "macOS"
+    elif "linux" in ua_l:
+        so = "Linux"
+    else:
+        so = "Desconocido"
+
+    if "mobile" in ua_l or "android" in ua_l or "iphone" in ua_l:
+        tipo = "Celular"
+    elif "ipad" in ua_l or "tablet" in ua_l:
+        tipo = "Tablet"
+    else:
+        tipo = "PC"
+
+    return navegador, so, tipo
+
+
+def geolocalizar_ip(ip):
+    if not ip or ip.startswith(("127.", "192.168.", "10.")) or ip == "::1":
+        return None
+    try:
+        with urllib.request.urlopen(f"http://ip-api.com/json/{ip}?fields=city,regionName,country,status", timeout=2) as resp:
+            data = json.loads(resp.read().decode())
+        if data.get("status") == "success":
+            partes = [p for p in [data.get("city"), data.get("regionName"), data.get("country")] if p]
+            return ", ".join(partes) if partes else None
+    except Exception:
+        pass
+    return None
+
+
 def send_verification_email(to_email, username, token):
     verify_url = f"{APP_URL}/verificar/{token}"
     subject    = "Verificá tu cuenta – Dation"
@@ -385,6 +438,11 @@ def init_db():
                     created_at TIMESTAMP NOT NULL DEFAULT NOW()
                 )
             """)
+            cur.execute("ALTER TABLE login_logs ADD COLUMN IF NOT EXISTS user_agent TEXT")
+            cur.execute("ALTER TABLE login_logs ADD COLUMN IF NOT EXISTS navegador VARCHAR(40)")
+            cur.execute("ALTER TABLE login_logs ADD COLUMN IF NOT EXISTS sistema_operativo VARCHAR(40)")
+            cur.execute("ALTER TABLE login_logs ADD COLUMN IF NOT EXISTS tipo_dispositivo VARCHAR(20)")
+            cur.execute("ALTER TABLE login_logs ADD COLUMN IF NOT EXISTS ubicacion VARCHAR(120)")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS device_heartbeats (
                     device_id VARCHAR(80) PRIMARY KEY,
@@ -530,21 +588,27 @@ def login_view():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         ip = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
+        ua = request.headers.get("User-Agent", "")
+        navegador, so, tipo_dispositivo = parse_user_agent(ua)
+        ubicacion = geolocalizar_ip(ip)
+        log_cols = "(usuario_id, username, ip, exitoso, user_agent, navegador, sistema_operativo, tipo_dispositivo, ubicacion)"
+        log_vals = "(%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+
         row = db_one("SELECT * FROM usuarios WHERE username = %s", (username,))
         if row and check_password_hash(row["password_hash"], password):
             if not row.get("email_verificado", True):
                 flash("Verificá tu email antes de ingresar. Revisá tu bandeja de entrada.", "error")
-                db_run("INSERT INTO login_logs (usuario_id, username, ip, exitoso) VALUES (%s,%s,%s,FALSE)",
-                       (row["id"], username, ip))
+                db_run(f"INSERT INTO login_logs {log_cols} VALUES {log_vals}",
+                       (row["id"], username, ip, False, ua, navegador, so, tipo_dispositivo, ubicacion))
             else:
                 login_user(User(row))
-                db_run("INSERT INTO login_logs (usuario_id, username, ip, exitoso) VALUES (%s,%s,%s,TRUE)",
-                       (row["id"], username, ip))
+                db_run(f"INSERT INTO login_logs {log_cols} VALUES {log_vals}",
+                       (row["id"], username, ip, True, ua, navegador, so, tipo_dispositivo, ubicacion))
                 return redirect(url_for("dashboard"))
         else:
             flash("Usuario o contraseña incorrectos.", "error")
-            db_run("INSERT INTO login_logs (usuario_id, username, ip, exitoso) VALUES (NULL,%s,%s,FALSE)",
-                   (username, ip))
+            db_run(f"INSERT INTO login_logs {log_cols} VALUES {log_vals}",
+                   (None, username, ip, False, ua, navegador, so, tipo_dispositivo, ubicacion))
     return render_template("login.html")
 
 @app.route("/registro", methods=["GET", "POST"])
