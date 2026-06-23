@@ -64,6 +64,12 @@
           Conectado a <strong style="color:var(--text)">{{ last_data.wifi_ssid }}</strong>
         </span>
         {% endif %}
+        {% if last_data.get('pausado_local') %}
+        <span style="font-size:11px;color:#f87171;margin-left:8px;font-weight:600">
+          <i class="fas fa-pause-circle" style="font-size:10px;animation:parpadeo 1s infinite"></i>
+          Pausado desde el dispositivo (botón físico)
+        </span>
+        {% endif %}
       </div>
 
       <!-- Terminal log (oculto) -->

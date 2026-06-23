@@ -657,15 +657,18 @@ def dashboard():
         d["ultima_vez"] = ultima_vez
 
         estado_actual = None
+        pausado_local = False
         if d.get("last_data"):
             try:
                 ld = d["last_data"] if isinstance(d["last_data"], dict) else json.loads(d["last_data"])
                 eid = ld.get("estado_id")
                 if eid is not None:
                     estado_actual = estados_map.get(int(eid))
+                pausado_local = bool(ld.get("pausado_local"))
             except Exception:
                 pass
         d["estado_actual"] = estado_actual
+        d["pausado_local"] = pausado_local
         # config_pending: tiene timbre_config y no fue confirmada
         d["config_pending"] = (d.get("config_acked") is False)
 
