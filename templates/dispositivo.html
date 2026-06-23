@@ -46,12 +46,12 @@
         {% if hb and minutes_ago is not none and minutes_ago < 30 %}
         <i class="fas fa-circle" style="color:#4ade80;font-size:8px"></i>
         <span style="color:#4ade80;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">
-          {{ hb.last_seen.strftime('%d/%m/%Y %H:%M:%S') }}
+          {{ hb.last_seen | to_local('%d/%m/%Y %H:%M:%S') }}
         </span>
         {% elif hb %}
         <i class="fas fa-circle" style="color:#f87171;font-size:8px"></i>
         <span style="color:#f87171;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">
-          {{ hb.last_seen.strftime('%d/%m/%Y %H:%M:%S') }}
+          {{ hb.last_seen | to_local('%d/%m/%Y %H:%M:%S') }}
         </span>
         <span style="font-size:11px;color:#f87171">(hace {{ minutes_ago }} min)</span>
         {% else %}
@@ -77,7 +77,7 @@
         {% set log_rows = hb_log if hb_log else [] %}
         {% for entry in log_rows %}
         <div style="padding:3px 0;border-bottom:1px solid #0d1f0d;white-space:pre-wrap;word-break:break-all">
-          <span style="opacity:.55">{{ entry.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>&nbsp;&nbsp;<span style="opacity:.7">&gt;</span>&nbsp;&nbsp;{% if entry.data %}{{ entry.data | tojson }}{% else %}<span style="opacity:.4">—</span>{% endif %}
+          <span style="opacity:.55">{{ entry.received_at | to_local('%Y-%m-%d %H:%M:%S') }}</span>&nbsp;&nbsp;<span style="opacity:.7">&gt;</span>&nbsp;&nbsp;{% if entry.data %}{{ entry.data | tojson }}{% else %}<span style="opacity:.4">—</span>{% endif %}
         </div>
         {% endfor %}
         {% for _ in range([0, 20 - log_rows|length]|max) %}
@@ -188,7 +188,7 @@
         <span>
           <strong style="color:#fb923c">Timbre pausado</strong>
           {% if timbre_cfg.pausado_hasta %}
-          — hasta las {{ timbre_cfg.pausado_hasta.strftime('%H:%M del %d/%m/%Y') }}
+          — hasta las {{ timbre_cfg.pausado_hasta | to_local('%H:%M del %d/%m/%Y') }}
           {% else %}
           — indefinidamente
           {% endif %}

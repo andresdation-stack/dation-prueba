@@ -345,7 +345,7 @@
               {{ l.ip or '–' }}
               {% if l.ubicacion %}<br><span style="color:var(--text-muted)"><i class="fas fa-map-marker-alt"></i> {{ l.ubicacion }}</span>{% endif %}
             </td>
-            <td class="td-muted">{{ l.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+            <td class="td-muted">{{ l.created_at | to_local('%d/%m/%Y %H:%M:%S') }}</td>
           </tr>
           {% endfor %}
         </tbody>

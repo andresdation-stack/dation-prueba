@@ -38,7 +38,7 @@
         <tr>
           <td><strong>{{ c.nombre }}</strong></td>
           <td class="td-muted">{{ c.num_estados }}</td>
-          <td class="td-muted">{{ c.created_at.strftime('%d/%m/%Y') }}</td>
+          <td class="td-muted">{{ c.created_at | to_local('%d/%m/%Y') }}</td>
           <td>
             <div style="display:flex;gap:6px">
               <a href="{{ url_for('admin_configuracion_edit', cid=c.id) }}" class="btn-icon" title="Editar estados">

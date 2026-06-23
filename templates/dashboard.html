@@ -65,7 +65,7 @@
         {% if d.online %}
           <i class="fas fa-circle" style="font-size:7px"></i> En línea
         {% elif d.ultima_vez %}
-          <i class="fas fa-clock"></i> {{ d.ultima_vez.strftime('%d/%m %H:%M') }}
+          <i class="fas fa-clock"></i> {{ d.ultima_vez | to_local('%d/%m %H:%M') }}
         {% else %}
           <i class="fas fa-unlink"></i> Sin contacto
         {% endif %}
@@ -111,7 +111,7 @@
                 {% if d.online %}
                   <i class="fas fa-circle" style="font-size:7px"></i> En línea
                 {% elif d.ultima_vez %}
-                  <i class="fas fa-clock"></i> {{ d.ultima_vez.strftime('%d/%m %H:%M') }}
+                  <i class="fas fa-clock"></i> {{ d.ultima_vez | to_local('%d/%m %H:%M') }}
                 {% else %}
                   <i class="fas fa-unlink"></i> Sin contacto
                 {% endif %}

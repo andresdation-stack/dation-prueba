@@ -25,6 +25,14 @@ app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 API_KEY = os.environ.get("API_KEY", "andres-123")
 
+ARG_OFFSET = timedelta(hours=-3)
+
+@app.template_filter("to_local")
+def to_local(dt, fmt="%d/%m/%Y %H:%M:%S"):
+    if not dt:
+        return ""
+    return (dt + ARG_OFFSET).strftime(fmt)
+
 SMTP_HOST    = os.environ.get("SMTP_HOST", "")
 SMTP_PORT    = int(os.environ.get("SMTP_PORT", 587))
 SMTP_USER    = os.environ.get("SMTP_USER", "")
